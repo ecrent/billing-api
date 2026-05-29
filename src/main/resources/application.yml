@@ -1,0 +1,29 @@
+spring:
+  datasource:
+    # Production: set DB_URL, DB_USERNAME, DB_PASSWORD as environment variables.
+    # Default values allow the app context to start in tests where @ServiceConnection
+    # overrides spring.datasource.* before the DataSource bean is created.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/billing}
+    username: ${DB_USERNAME:billing}
+    password: ${DB_PASSWORD:billing}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # validate: Hibernate checks entities match the DB schema at startup.
+      # We use 'validate' not 'update' because Flyway owns the schema — Hibernate must not alter it.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /api-docs

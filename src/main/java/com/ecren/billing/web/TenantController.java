@@ -3,6 +3,7 @@ package com.ecren.billing.web;
 import com.ecren.billing.dto.request.CreateTenantRequest;
 import com.ecren.billing.dto.response.TenantResponse;
 import com.ecren.billing.service.TenantService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +21,7 @@ public class TenantController {
         this.service = service;
     }
 
+    @Operation(summary = "Create tenant")
     @PostMapping
     public ResponseEntity<TenantResponse> create(
             @Valid @RequestBody CreateTenantRequest request,
@@ -29,6 +31,7 @@ public class TenantController {
         return ResponseEntity.created(location).body(response);
     }
 
+    @Operation(summary = "Get tenant by ID")
     @GetMapping("/{id}")
     public TenantResponse getById(@PathVariable UUID id) {
         return service.findById(id);

@@ -75,14 +75,13 @@ public class TenantContextFilter implements Filter {
         String method = request.getMethod();
         String path = request.getRequestURI();
 
-        // POST /api/v1/tenants is excluded; other methods on /api/v1/tenants/* are not
-        if ("POST".equalsIgnoreCase(method) && "/api/v1/tenants".equals(path)) {
-            return true;
-        }
-        // prefix-based exclusions (GET /api/v1/plans/**, /swagger-ui/**, /api-docs/**)
-        return path.equals("/api/v1/plans")
+        return path.equals("/api/v1/tenants")
+                || path.startsWith("/api/v1/tenants/")
+                || path.equals("/api/v1/plans")
                 || path.startsWith("/api/v1/plans/")
+                || path.equals("/swagger-ui.html")
                 || path.startsWith("/swagger-ui/")
+                || path.equals("/api-docs")
                 || path.startsWith("/api-docs/");
     }
 

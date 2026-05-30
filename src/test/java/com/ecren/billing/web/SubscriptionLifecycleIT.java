@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.*;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
@@ -41,8 +42,13 @@ class SubscriptionLifecycleIT {
     @Autowired
     TenantRepository tenantRepository;
 
+    @Autowired
+    JdbcTemplate jdbc;
+
     @BeforeEach
     void setUp() {
+        jdbc.execute("DELETE FROM invoice_line_items");
+        jdbc.execute("DELETE FROM invoices");
         subscriptionRepository.deleteAll();
         planRepository.deleteAll();
         tenantRepository.deleteAll();

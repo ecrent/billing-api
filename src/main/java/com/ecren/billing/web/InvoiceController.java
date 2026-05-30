@@ -4,10 +4,12 @@ import com.ecren.billing.dto.response.InvoiceResponse;
 import com.ecren.billing.dto.response.PageResponse;
 import com.ecren.billing.service.InvoiceService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+@Tag(name = "5. Invoices")
 @RestController
 @RequestMapping("/api/v1/invoices")
 public class InvoiceController {

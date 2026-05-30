@@ -3,11 +3,13 @@ package com.ecren.billing.web;
 import com.ecren.billing.dto.response.PlanResponse;
 import com.ecren.billing.service.PlanService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
 
+@Tag(name = "2. Plans")
 @RestController
 @RequestMapping("/api/v1/plans")
 public class PlanController {

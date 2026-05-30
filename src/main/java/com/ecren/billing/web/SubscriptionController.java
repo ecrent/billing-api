@@ -4,11 +4,13 @@ import com.ecren.billing.dto.request.CreateSubscriptionRequest;
 import com.ecren.billing.dto.response.SubscriptionResponse;
 import com.ecren.billing.service.SubscriptionService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@Tag(name = "3. Subscriptions")
 @RestController
 @RequestMapping("/api/v1/subscriptions")
 public class SubscriptionController {

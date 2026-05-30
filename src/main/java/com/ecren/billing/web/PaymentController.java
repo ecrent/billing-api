@@ -4,6 +4,7 @@ import com.ecren.billing.dto.request.AttemptPaymentRequest;
 import com.ecren.billing.dto.response.PaymentResponse;
 import com.ecren.billing.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.net.URI;
 import java.util.UUID;
 
+@Tag(name = "6. Payments")
 @RestController
 @RequestMapping("/api/v1/payments")
 public class PaymentController {

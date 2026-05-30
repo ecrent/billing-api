@@ -4,6 +4,7 @@ import com.ecren.billing.dto.request.CreateTenantRequest;
 import com.ecren.billing.dto.response.TenantResponse;
 import com.ecren.billing.service.TenantService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,6 +12,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.UUID;
 
+@Tag(name = "1. Tenants")
 @RestController
 @RequestMapping("/api/v1/tenants")
 public class TenantController {

@@ -136,7 +136,7 @@ public class PlanChangeService {
             LedgerEntry paymentEntry = new LedgerEntry();
             paymentEntry.setTenantId(tenantId);
             paymentEntry.setType(LedgerEntryType.PAYMENT);
-            paymentEntry.setAmountCents(totalCents);
+            paymentEntry.setAmountCents(-totalCents);
             paymentEntry.setDescription("Payment for plan change");
             paymentEntry.setReferenceId(invoice.getId());
             ledgerEntryRepository.save(paymentEntry);

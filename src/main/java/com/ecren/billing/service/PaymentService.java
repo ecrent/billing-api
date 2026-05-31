@@ -104,7 +104,7 @@ public class PaymentService {
             LedgerEntry paymentEntry = new LedgerEntry();
             paymentEntry.setTenantId(tenantId);
             paymentEntry.setType(LedgerEntryType.PAYMENT);
-            paymentEntry.setAmountCents(invoice.getTotalCents());
+            paymentEntry.setAmountCents(-invoice.getTotalCents());
             paymentEntry.setDescription("Payment for invoice " + invoice.getId());
             paymentEntry.setReferenceId(invoice.getId());
             ledgerEntryRepository.save(paymentEntry);

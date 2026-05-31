@@ -146,7 +146,7 @@ class PaymentAndLedgerIT {
         LedgerSummaryResponse ledgerBody = ledger.getBody();
         assertThat(ledgerBody).isNotNull();
         assertThat(ledgerBody.entries()).hasSize(2);
-        assertThat(ledgerBody.balanceCents()).isEqualTo(2000L);
+        assertThat(ledgerBody.balanceCents()).isEqualTo(0L);
     }
 
     @Test
@@ -245,7 +245,7 @@ class PaymentAndLedgerIT {
         LedgerSummaryResponse body = ledger.getBody();
         assertThat(body).isNotNull();
         assertThat(body.entries()).hasSize(3);
-        assertThat(body.balanceCents()).isEqualTo(1500L);
+        assertThat(body.balanceCents()).isEqualTo(-500L);
     }
 
     private HttpHeaders headersWithTenantId(UUID tenantId) {

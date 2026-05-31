@@ -6,7 +6,6 @@ import com.ecren.billing.domain.PlanMetricLimit;
 import com.ecren.billing.domain.enums.PlanStatus;
 import com.ecren.billing.domain.enums.UsageMetric;
 import com.ecren.billing.repository.PlanRepository;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,6 +16,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.jdbc.Sql;
 
 import java.util.List;
 import java.util.Map;
@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(TestcontainersConfiguration.class)
 @ActiveProfiles("test")
+@Sql(statements = "TRUNCATE TABLE plans CASCADE", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 class PlanCatalogIT {
 
     @Autowired
@@ -34,11 +35,6 @@ class PlanCatalogIT {
 
     @Autowired
     PlanRepository planRepository;
-
-    @BeforeEach
-    void setUp() {
-        planRepository.deleteAll();
-    }
 
     @Test
     void listPlans_givenSeededPlans_thenReturnsAllActive() {

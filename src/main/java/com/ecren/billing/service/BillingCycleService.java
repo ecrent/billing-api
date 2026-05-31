@@ -164,7 +164,7 @@ public class BillingCycleService {
             LedgerEntry paymentEntry = new LedgerEntry();
             paymentEntry.setTenantId(subscription.getTenantId());
             paymentEntry.setType(LedgerEntryType.PAYMENT);
-            paymentEntry.setAmountCents(totalCents);
+            paymentEntry.setAmountCents(-totalCents);
             paymentEntry.setReferenceId(invoice.getId());
             paymentEntry.setDescription("Billing cycle payment");
             ledgerEntryRepository.save(paymentEntry);

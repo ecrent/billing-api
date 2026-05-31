@@ -171,7 +171,7 @@ public class DataInitializer implements ApplicationRunner {
                 "VALUES (?1, ?2, 'PAYMENT', ?3, 'Payment received', ?4, ?5)")
                 .setParameter(1, paymentEntryId)
                 .setParameter(2, tenantId)
-                .setParameter(3, amountCents)
+                .setParameter(3, -amountCents)
                 .setParameter(4, paymentId)
                 .setParameter(5, now)
                 .executeUpdate();

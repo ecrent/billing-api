@@ -58,7 +58,7 @@ public class UsageService {
         record.setQuantity(request.quantity());
         record.setIdempotencyKey(request.idempotencyKey());
 
-        return repository.findByIdempotencyKey(request.idempotencyKey())
+        return repository.findByIdempotencyKeyAndTenantId(request.idempotencyKey(), tenantId)
                 .map(existing -> new ReportResult(mapper.toResponse(existing), false))
                 .orElseGet(() -> {
                     UsageRecord saved = repository.save(record);

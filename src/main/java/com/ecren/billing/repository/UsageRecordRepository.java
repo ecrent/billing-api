@@ -11,7 +11,7 @@ import java.util.UUID;
 
 public interface UsageRecordRepository extends JpaRepository<UsageRecord, UUID> {
 
-    Optional<UsageRecord> findByIdempotencyKey(String key);
+    Optional<UsageRecord> findByIdempotencyKeyAndTenantId(String key, UUID tenantId);
 
     @Query("SELECT u FROM UsageRecord u WHERE u.tenantId = :tenantId AND u.subscriptionId = :subscriptionId AND u.metric = :metric")
     List<UsageRecord> findByTenantIdAndSubscriptionIdAndMetric(UUID tenantId, UUID subscriptionId, UsageMetric metric);

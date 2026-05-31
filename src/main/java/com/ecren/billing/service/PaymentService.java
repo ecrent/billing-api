@@ -62,7 +62,7 @@ public class PaymentService {
     public PaymentResult attemptPayment(AttemptPaymentRequest request) {
         UUID tenantId = TenantContext.get();
 
-        return repository.findByIdempotencyKey(request.idempotencyKey())
+        return repository.findByIdempotencyKeyAndTenantId(request.idempotencyKey(), tenantId)
                 .map(existing -> new PaymentResult(mapper.toResponse(existing), false))
                 .orElseGet(() -> new PaymentResult(processNewPayment(request, tenantId), true));
     }

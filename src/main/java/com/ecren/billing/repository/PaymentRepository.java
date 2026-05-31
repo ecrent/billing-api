@@ -8,6 +8,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface PaymentRepository extends JpaRepository<Payment, UUID> {
-    Optional<Payment> findByIdempotencyKey(String key);
+    Optional<Payment> findByIdempotencyKeyAndTenantId(String key, UUID tenantId);
     long countByInvoiceIdAndStatus(UUID invoiceId, PaymentStatus status);
 }

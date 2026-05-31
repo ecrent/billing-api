@@ -39,6 +39,16 @@ docker compose up
 
 Swagger UI: http://localhost:8080/swagger-ui.html
 
+Adminer (DB browser): http://localhost:8090
+
+| Field | Value |
+|---|---|
+| System | PostgreSQL |
+| Server | postgres |
+| Username | value of `DB_USERNAME` in `.env` |
+| Password | value of `DB_PASSWORD` in `.env` |
+| Database | billing |
+
 ## How to Run Tests
 
 ```bash

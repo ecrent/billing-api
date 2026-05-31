@@ -147,7 +147,7 @@ Runs nightly via `@Scheduled`. Each subscription is processed in its own isolate
 
 ```mermaid
 flowchart TD
-    A[BillingCycleService\n@Scheduled daily at midnight] --> B[ShedLock acquires distributed lock]
+    A[BillingCycleService - scheduled daily at midnight] --> B[ShedLock acquires distributed lock]
     B --> C[Load all ACTIVE subscriptions\nwhere current_period_end = today]
     C --> D[For each subscription\nrun processTenant in own tx]
     D --> E[Aggregate usage records\nfor the billing period]
@@ -155,6 +155,6 @@ flowchart TD
     F --> G[Finalize invoice\nstatus = FINALIZED]
     G --> H[Attempt charge\nvia payment gateway]
     H --> I{Gateway result}
-    I -- SUCCESS --> J[Mark invoice PAID\nAppend CHARGE + PAYMENT ledger entries\nRoll period forward 30 days]
-    I -- FAILURE --> K[Mark payment FAILED\nIf 3+ failures: set subscription PAST_DUE]
+    I -- SUCCESS --> J[Mark invoice PAID\nRoll period forward 30 days]
+    I -- FAILURE --> K[Mark payment FAILED\nIf 3+ failures: set PAST_DUE]
 ```

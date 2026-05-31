@@ -25,6 +25,7 @@ public abstract class BaseEntity {
     private LocalDateTime updatedAt;
 
     public UUID getId() { return id; }
+    public void setId(UUID id) { this.id = id; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

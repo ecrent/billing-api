@@ -4,6 +4,7 @@ import com.ecren.billing.dto.request.CreateTenantRequest;
 import com.ecren.billing.dto.response.TenantResponse;
 import com.ecren.billing.service.TenantService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -34,8 +35,10 @@ public class TenantController {
     }
 
     @Operation(summary = "Get tenant by ID")
-    @GetMapping("/{id}")
-    public TenantResponse getById(@PathVariable UUID id) {
-        return service.findById(id);
+    @GetMapping("/{tenantId}")
+    public TenantResponse getById(
+            @Parameter(example = "00000000-0000-0000-0000-000000000001")
+            @PathVariable UUID tenantId) {
+        return service.findById(tenantId);
     }
 }

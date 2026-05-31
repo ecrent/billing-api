@@ -41,6 +41,7 @@ public class Payment {
     private LocalDateTime createdAt;
 
     public UUID getId() { return id; }
+    public void setId(UUID id) { this.id = id; }
 
     public UUID getTenantId() { return tenantId; }
     public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }

@@ -3,6 +3,7 @@ package com.ecren.billing.web;
 import com.ecren.billing.dto.response.PlanResponse;
 import com.ecren.billing.service.PlanService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,8 +28,10 @@ public class PlanController {
     }
 
     @Operation(summary = "Get plan by ID")
-    @GetMapping("/{id}")
-    public PlanResponse getPlan(@PathVariable UUID id) {
-        return service.findById(id);
+    @GetMapping("/{planId}")
+    public PlanResponse getPlan(
+            @Parameter(description = "Use ID from GET /api/v1/plans")
+            @PathVariable UUID planId) {
+        return service.findById(planId);
     }
 }

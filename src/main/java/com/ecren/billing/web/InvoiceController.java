@@ -4,6 +4,7 @@ import com.ecren.billing.dto.response.InvoiceResponse;
 import com.ecren.billing.dto.response.PageResponse;
 import com.ecren.billing.service.InvoiceService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,14 +31,18 @@ public class InvoiceController {
     }
 
     @Operation(summary = "Get invoice by ID")
-    @GetMapping("/{id}")
-    public InvoiceResponse getById(@PathVariable UUID id) {
-        return service.getById(id);
+    @GetMapping("/{invoiceId}")
+    public InvoiceResponse getById(
+            @Parameter(example = "00000000-0000-0000-0000-000000000100")
+            @PathVariable UUID invoiceId) {
+        return service.getById(invoiceId);
     }
 
     @Operation(summary = "Void invoice")
-    @PostMapping("/{id}/void")
-    public InvoiceResponse void_(@PathVariable UUID id) {
-        return service.void_(id);
+    @PostMapping("/{invoiceId}/void")
+    public InvoiceResponse void_(
+            @Parameter(example = "00000000-0000-0000-0000-000000000100")
+            @PathVariable UUID invoiceId) {
+        return service.void_(invoiceId);
     }
 }

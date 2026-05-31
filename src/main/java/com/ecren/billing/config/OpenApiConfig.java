@@ -43,7 +43,7 @@ public class OpenApiConfig {
                     .in("header")
                     .name("X-Tenant-ID")
                     .required(true)
-                    .schema(new StringSchema().format("uuid"))
+                    .schema(new StringSchema().format("uuid").example("00000000-0000-0000-0000-000000000001"))
                     .description("Tenant identifier"));
             return operation;
         };

@@ -4,6 +4,7 @@ import com.ecren.billing.dto.request.AttemptPaymentRequest;
 import com.ecren.billing.dto.response.PaymentResponse;
 import com.ecren.billing.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -34,8 +35,10 @@ public class PaymentController {
     }
 
     @Operation(summary = "Get payment by ID")
-    @GetMapping("/{id}")
-    public PaymentResponse getPayment(@PathVariable UUID id) {
-        return service.getPayment(id);
+    @GetMapping("/{paymentId}")
+    public PaymentResponse getPayment(
+            @Parameter(example = "00000000-0000-0000-0000-000000001000")
+            @PathVariable UUID paymentId) {
+        return service.getPayment(paymentId);
     }
 }

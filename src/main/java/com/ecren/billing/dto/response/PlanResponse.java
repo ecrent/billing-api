@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 public record PlanResponse(
-        UUID id,
+        UUID planId,
         String name,
         String slug,
         long basePriceCents,

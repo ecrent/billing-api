@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record PaymentResponse(
-        UUID id,
+        UUID paymentId,
         UUID tenantId,
         UUID invoiceId,
         long amountCents,

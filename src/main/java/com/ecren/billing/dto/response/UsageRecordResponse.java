@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record UsageRecordResponse(
-        UUID id,
+        UUID usageRecordId,
         UUID tenantId,
         UUID subscriptionId,
         String metric,

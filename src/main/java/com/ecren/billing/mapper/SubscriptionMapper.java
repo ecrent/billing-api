@@ -8,6 +8,7 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface SubscriptionMapper {
 
+    @Mapping(target = "subscriptionId", source = "id")
     @Mapping(target = "status", expression = "java(subscription.getStatus().name())")
     SubscriptionResponse toResponse(Subscription subscription);
 }

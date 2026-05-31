@@ -71,7 +71,7 @@ class SubscriptionLifecycleIT {
 
         SubscriptionResponse body = response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.id()).isNotNull();
+        assertThat(body.subscriptionId()).isNotNull();
         assertThat(body.tenantId()).isEqualTo(tenant.getId());
         assertThat(body.planId()).isEqualTo(plan.getId());
         assertThat(body.status()).isEqualTo("ACTIVE");

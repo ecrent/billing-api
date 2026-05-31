@@ -10,9 +10,11 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface PlanMapper {
 
+    @Mapping(target = "planId", source = "id")
     @Mapping(target = "status", expression = "java(plan.getStatus().name())")
     PlanResponse toResponse(Plan plan);
 
+    @Mapping(target = "limitId", source = "id")
     @Mapping(target = "metric", expression = "java(limit.getMetric().name())")
     PlanMetricLimitResponse toResponse(PlanMetricLimit limit);
 }

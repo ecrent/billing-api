@@ -30,7 +30,7 @@ public class TenantController {
             @Valid @RequestBody CreateTenantRequest request,
             UriComponentsBuilder uriBuilder) {
         TenantResponse response = service.create(request);
-        var location = uriBuilder.path("/api/v1/tenants/{id}").buildAndExpand(response.id()).toUri();
+        var location = uriBuilder.path("/api/v1/tenants/{id}").buildAndExpand(response.tenantId()).toUri();
         return ResponseEntity.created(location).body(response);
     }
 

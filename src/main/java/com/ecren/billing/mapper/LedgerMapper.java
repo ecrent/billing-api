@@ -8,6 +8,7 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface LedgerMapper {
 
+    @Mapping(target = "ledgerEntryId", source = "id")
     @Mapping(target = "type", expression = "java(entry.getType().name())")
     LedgerEntryResponse toResponse(LedgerEntry entry);
 }

@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 public record InvoiceResponse(
-        UUID id,
+        UUID invoiceId,
         UUID tenantId,
         UUID subscriptionId,
         String status,

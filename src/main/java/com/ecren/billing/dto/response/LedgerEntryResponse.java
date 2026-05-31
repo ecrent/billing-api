@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record LedgerEntryResponse(
-        UUID id,
+        UUID ledgerEntryId,
         String type,
         long amountCents,
         String description,

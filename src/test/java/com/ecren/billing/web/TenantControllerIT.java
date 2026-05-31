@@ -46,7 +46,7 @@ class TenantControllerIT {
         assertThat(response.getHeaders().getLocation()).isNotNull();
         TenantResponse body = response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.id()).isNotNull();
+        assertThat(body.tenantId()).isNotNull();
         assertThat(body.name()).isEqualTo("Acme Corp");
         assertThat(body.email()).isEqualTo("acme@example.com");
         assertThat(body.status()).isEqualTo("ACTIVE");
@@ -71,7 +71,7 @@ class TenantControllerIT {
                 "/api/v1/tenants",
                 new CreateTenantRequest("Get Corp", "getcorp@example.com"),
                 TenantResponse.class);
-        UUID id = created.getBody().id();
+        UUID id = created.getBody().tenantId();
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("X-Tenant-ID", id.toString());
@@ -80,7 +80,7 @@ class TenantControllerIT {
                 new HttpEntity<>(headers), TenantResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody().id()).isEqualTo(id);
+        assertThat(response.getBody().tenantId()).isEqualTo(id);
     }
 
     @Test

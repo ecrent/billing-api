@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record SubscriptionResponse(
-        UUID id,
+        UUID subscriptionId,
         UUID tenantId,
         UUID planId,
         String status,

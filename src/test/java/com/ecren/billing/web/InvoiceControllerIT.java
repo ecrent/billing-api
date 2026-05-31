@@ -124,7 +124,7 @@ class InvoiceControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         InvoiceResponse body = response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.id()).isEqualTo(invoice.getId());
+        assertThat(body.invoiceId()).isEqualTo(invoice.getId());
         assertThat(body.lineItems()).hasSize(2);
     }
 

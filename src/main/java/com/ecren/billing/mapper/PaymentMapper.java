@@ -8,6 +8,7 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface PaymentMapper {
 
+    @Mapping(target = "paymentId", source = "id")
     @Mapping(target = "status", expression = "java(payment.getStatus().name())")
     PaymentResponse toResponse(Payment payment);
 }

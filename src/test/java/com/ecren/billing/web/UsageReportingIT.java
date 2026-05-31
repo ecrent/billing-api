@@ -121,7 +121,7 @@ class UsageReportingIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         UsageRecordResponse body = response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.id()).isNotNull();
+        assertThat(body.usageRecordId()).isNotNull();
         assertThat(body.metric()).isEqualTo("API_CALLS");
         assertThat(body.quantity()).isEqualTo(10L);
         assertThat(body.idempotencyKey()).isEqualTo("key-001");
@@ -144,7 +144,7 @@ class UsageReportingIT {
 
         assertThat(second.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(second.getBody()).isNotNull();
-        assertThat(second.getBody().id()).isEqualTo(first.getBody().id());
+        assertThat(second.getBody().usageRecordId()).isEqualTo(first.getBody().usageRecordId());
     }
 
     @Test

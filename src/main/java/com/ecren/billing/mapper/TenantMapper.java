@@ -8,6 +8,7 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface TenantMapper {
 
+    @Mapping(target = "tenantId", source = "id")
     @Mapping(target = "status", expression = "java(tenant.getStatus().name())")
     TenantResponse toResponse(Tenant tenant);
 }

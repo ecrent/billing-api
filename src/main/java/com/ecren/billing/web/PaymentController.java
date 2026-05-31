@@ -31,7 +31,7 @@ public class PaymentController {
         if (!result.isNew()) {
             return ResponseEntity.ok(result.response());
         }
-        return ResponseEntity.created(URI.create("/api/v1/payments/" + result.response().id())).body(result.response());
+        return ResponseEntity.created(URI.create("/api/v1/payments/" + result.response().paymentId())).body(result.response());
     }
 
     @Operation(summary = "Get payment by ID")

@@ -10,9 +10,11 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface InvoiceMapper {
 
+    @Mapping(target = "invoiceId", source = "id")
     @Mapping(target = "status", expression = "java(invoice.getStatus().name())")
     InvoiceResponse toResponse(Invoice invoice);
 
+    @Mapping(target = "lineItemId", source = "id")
     @Mapping(target = "type", expression = "java(item.getType().name())")
     LineItemResponse toResponse(InvoiceLineItem item);
 }

@@ -8,6 +8,7 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface UsageMapper {
 
+    @Mapping(target = "usageRecordId", source = "id")
     @Mapping(target = "metric", expression = "java(record.getMetric().name())")
     UsageRecordResponse toResponse(UsageRecord record);
 }

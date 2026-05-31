@@ -166,7 +166,7 @@ class PaymentAndLedgerIT {
         assertThat(second.getStatusCode()).isEqualTo(HttpStatus.OK);
 
         assertThat(second.getBody()).isNotNull();
-        assertThat(second.getBody().id()).isEqualTo(first.getBody().id());
+        assertThat(second.getBody().paymentId()).isEqualTo(first.getBody().paymentId());
 
         ResponseEntity<LedgerSummaryResponse> ledger = rest.exchange(
                 "/api/v1/ledger", HttpMethod.GET,

@@ -118,7 +118,7 @@ class SubscriptionLifecycleIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         SubscriptionResponse body = response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.status()).isEqualTo("ACTIVE");
+        assertThat(body.status()).isEqualTo("CANCELLED");
         assertThat(body.cancelledAt()).isNotNull();
     }
 

@@ -6,8 +6,6 @@ services:
       POSTGRES_DB: billing
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -33,7 +31,7 @@ services:
   adminer:
     image: adminer
     ports:
-      - "8090:8080"
+      - "127.0.0.1:8090:8080"
     depends_on:
       - postgres
 

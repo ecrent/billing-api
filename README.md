@@ -5,7 +5,7 @@ A multi-tenant SaaS subscription billing REST API built with Spring Boot 3.5 and
 ![CI](https://github.com/ecrent/billing-api/actions/workflows/ci.yml/badge.svg)
 
 ## Live API
-coming soon
+https://billing-api.eanil.dev
 
 ## Tech Stack
 

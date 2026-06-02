@@ -1,62 +1,57 @@
-
-
 name: Build & Deploy API
 
 on:
-  push:
-    branches: [main]
+  push:
+    branches: [main]
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE: ghcr.io/ecrent/billing-api
+  REGISTRY: ghcr.io
+  IMAGE: ghcr.io/ecrent/billing-api
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
-    steps:
-      - uses: actions/checkout@v4
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:${{ github.sha }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
 
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            cd /opt/eanil/compose
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/eanil/compose
 
-            # Activate billing-api nginx config on first deploy
-            if [ -f /opt/eanil/nginx/conf.d/billing-api.conf.disabled ]; then
-              mv /opt/eanil/nginx/conf.d/billing-api.conf.disabled \
-                 /opt/eanil/nginx/conf.d/billing-api.conf
-            fi
+            # Activate billing-api nginx config on first deploy
+            if [ -f /opt/eanil/nginx/conf.d/billing-api.conf.disabled ]; then
+              mv /opt/eanil/nginx/conf.d/billing-api.conf.disabled \
+                 /opt/eanil/nginx/conf.d/billing-api.conf
+            fi
 
-            docker pull ghcr.io/ecrent/billing-api:latest
-            docker compose up -d billing-api
-            docker compose exec -T nginx nginx -s reload
+            docker pull ghcr.io/ecrent/billing-api:latest
+            docker compose up -d billing-api
+            docker compose exec -T nginx nginx -s reload
 
-            # Clean up old images
-            docker image prune -f
-
-
-
+            # Clean up old images
+            docker image prune -f

@@ -10,11 +10,16 @@ import com.ecren.billing.exception.ResourceNotFoundException;
 import com.ecren.billing.mapper.SubscriptionMapper;
 import com.ecren.billing.repository.PlanRepository;
 import com.ecren.billing.repository.SubscriptionRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -23,11 +28,19 @@ public class SubscriptionService {
     private final SubscriptionRepository repository;
     private final PlanRepository planRepository;
     private final SubscriptionMapper mapper;
+    private final Set<UUID> protectedTenantIds;
 
-    public SubscriptionService(SubscriptionRepository repository, PlanRepository planRepository, SubscriptionMapper mapper) {
+    public SubscriptionService(SubscriptionRepository repository, PlanRepository planRepository,
+                               SubscriptionMapper mapper,
+                               @Value("${app.protected-tenant-ids:}") String protectedTenantIdsRaw) {
         this.repository = repository;
         this.planRepository = planRepository;
         this.mapper = mapper;
+        this.protectedTenantIds = Arrays.stream(protectedTenantIdsRaw.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(UUID::fromString)
+                .collect(Collectors.toSet());
     }
 
     @Transactional
@@ -61,9 +74,13 @@ public class SubscriptionService {
     @Transactional
     public SubscriptionResponse cancel() {
         var tenantId = TenantContext.get();
+        if (protectedTenantIds.contains(tenantId)) {
+            throw new ConflictException("This is a demo tenant and cannot be modified");
+        }
         Subscription subscription = repository.findByTenantIdAndStatus(tenantId, SubscriptionStatus.ACTIVE)
                 .orElseThrow(() -> new ResourceNotFoundException("No active subscription for tenant: " + tenantId));
 
+        subscription.setStatus(SubscriptionStatus.CANCELLED);
         subscription.setCancelledAt(LocalDateTime.now());
         return mapper.toResponse(repository.save(subscription));
     }

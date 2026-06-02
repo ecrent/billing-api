@@ -55,7 +55,7 @@ jobs:
             fi
 
             docker pull ghcr.io/ecrent/billing-api:latest
-            docker compose up -d billing-api
+            docker compose up -d --force-recreate billing-api
             docker compose exec -T nginx nginx -s reload
 
             # Clean up old images

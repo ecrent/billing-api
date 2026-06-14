@@ -46,17 +46,18 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /opt/eanil/compose
+            bash -lc '
+              cd /opt/eanil/compose
 
-            # Activate billing-api nginx config on first deploy
-            if [ -f /opt/eanil/nginx/conf.d/billing-api.conf.disabled ]; then
-              mv /opt/eanil/nginx/conf.d/billing-api.conf.disabled \
-                 /opt/eanil/nginx/conf.d/billing-api.conf
-            fi
+              # Activate billing-api nginx config on first deploy
+              if [ -f /opt/eanil/nginx/conf.d/billing-api.conf.disabled ]; then
+                mv /opt/eanil/nginx/conf.d/billing-api.conf.disabled \
+                   /opt/eanil/nginx/conf.d/billing-api.conf
+              fi
 
-            docker pull ghcr.io/ecrent/billing-api:latest
-            docker compose up -d --force-recreate billing-api
-            docker compose exec -T nginx nginx -s reload
+              docker pull ghcr.io/ecrent/billing-api:latest
+              docker compose up -d --force-recreate billing-api
+              docker compose exec -T nginx nginx -s reload
 
-            # Clean up old images
-            docker image prune -f
+              docker image prune -f
+            '

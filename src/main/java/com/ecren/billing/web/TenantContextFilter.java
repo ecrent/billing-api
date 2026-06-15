@@ -1,7 +1,7 @@
 package com.ecren.billing.web;
 
 import com.ecren.billing.common.TenantContext;
-import com.ecren.billing.repository.TenantRepository;
+import com.ecren.billing.security.JwtPrincipal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,27 +9,18 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.UUID;
 
 @Component
 public class TenantContextFilter implements Filter {
 
-    private static final List<String> EXCLUDED_PREFIXES = List.of(
-            "/api/v1/tenants",
-            "/api/v1/plans/",
-            "/swagger-ui/",
-            "/api-docs/"
-    );
-
-    private final TenantRepository tenantRepository;
     private final ObjectMapper objectMapper;
 
-    public TenantContextFilter(TenantRepository tenantRepository, ObjectMapper objectMapper) {
-        this.tenantRepository = tenantRepository;
+    public TenantContextFilter(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
@@ -44,26 +35,19 @@ public class TenantContextFilter implements Filter {
             return;
         }
 
-        String header = request.getHeader("X-Tenant-ID");
-        if (header == null || header.isBlank()) {
-            writeProblem(response, HttpStatus.BAD_REQUEST, "X-Tenant-ID header is required");
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !(auth.getPrincipal() instanceof JwtPrincipal principal)) {
+            writeProblem(response, HttpStatus.UNAUTHORIZED, "Authentication required");
             return;
         }
 
-        UUID tenantId;
-        try {
-            tenantId = UUID.fromString(header);
-        } catch (IllegalArgumentException e) {
-            writeProblem(response, HttpStatus.BAD_REQUEST, "X-Tenant-ID is not a valid UUID");
+        // ADMIN role doesn't need a tenant context — their endpoints don't scope by tenant
+        if ("ADMIN".equals(principal.role())) {
+            chain.doFilter(req, res);
             return;
         }
 
-        if (!tenantRepository.existsById(tenantId)) {
-            writeProblem(response, HttpStatus.NOT_FOUND, "Tenant not found: " + tenantId);
-            return;
-        }
-
-        TenantContext.set(tenantId);
+        TenantContext.set(principal.tenantId());
         try {
             chain.doFilter(req, res);
         } finally {
@@ -72,11 +56,8 @@ public class TenantContextFilter implements Filter {
     }
 
     private boolean isExcluded(HttpServletRequest request) {
-        String method = request.getMethod();
         String path = request.getRequestURI();
-
-        return path.equals("/api/v1/tenants")
-                || path.startsWith("/api/v1/tenants/")
+        return path.startsWith("/api/v1/auth/")
                 || path.equals("/api/v1/plans")
                 || path.startsWith("/api/v1/plans/")
                 || path.equals("/swagger-ui.html")

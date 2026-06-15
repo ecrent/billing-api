@@ -4,11 +4,13 @@ import com.ecren.billing.domain.Plan;
 import com.ecren.billing.domain.PlanMetricLimit;
 import com.ecren.billing.domain.enums.UsageMetric;
 import com.ecren.billing.repository.PlanRepository;
+import com.ecren.billing.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,12 +40,17 @@ public class DataInitializer implements ApplicationRunner {
     static final UUID CAROL_PAYMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000003000");
 
     private final PlanRepository planRepository;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @PersistenceContext
     private EntityManager em;
 
-    public DataInitializer(PlanRepository planRepository) {
+    public DataInitializer(PlanRepository planRepository, UserRepository userRepository,
+                           PasswordEncoder passwordEncoder) {
         this.planRepository = planRepository;
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -92,6 +99,24 @@ public class DataInitializer implements ApplicationRunner {
         seedTenant(CAROL_TENANT_ID, "Carol Davis", "carol@example.com",
                 CAROL_SUB_ID, enterpriseId, CAROL_INVOICE_ID, 9900L, CAROL_PAYMENT_ID,
                 periodStart, periodEnd, now);
+
+        // Seed users (admin + one per seeded tenant)
+        seedUser(null,          "admin@billing.dev",  "Admin1234!",  "ADMIN", now);
+        seedUser(ALICE_TENANT_ID, "alice@example.com", "Alice1234!",  "USER",  now);
+        seedUser(BOB_TENANT_ID,   "bob@example.com",   "Bob1234!",    "USER",  now);
+        seedUser(CAROL_TENANT_ID, "carol@example.com", "Carol1234!",  "USER",  now);
+    }
+
+    private void seedUser(UUID tenantId, String email, String rawPassword, String role, LocalDateTime now) {
+        em.createNativeQuery(
+                "INSERT INTO users (email, password, role, tenant_id, created_at, updated_at) " +
+                "VALUES (?1, ?2, ?3, ?4, ?5, ?5)")
+                .setParameter(1, email)
+                .setParameter(2, passwordEncoder.encode(rawPassword))
+                .setParameter(3, role)
+                .setParameter(4, tenantId)
+                .setParameter(5, now)
+                .executeUpdate();
     }
 
     private void seedTenant(

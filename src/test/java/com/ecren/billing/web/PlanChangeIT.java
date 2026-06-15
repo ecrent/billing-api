@@ -1,6 +1,6 @@
 package com.ecren.billing.web;
 
-import com.ecren.billing.TestcontainersConfiguration;
+import com.ecren.billing.BaseIT;
 import com.ecren.billing.domain.Plan;
 import com.ecren.billing.domain.Subscription;
 import com.ecren.billing.domain.Tenant;
@@ -19,25 +19,15 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.*;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(TestcontainersConfiguration.class)
-@ActiveProfiles("test")
-class PlanChangeIT {
-
-    @Autowired
-    TestRestTemplate rest;
+class PlanChangeIT extends BaseIT {
 
     @Autowired
     SubscriptionRepository subscriptionRepository;
@@ -57,20 +47,17 @@ class PlanChangeIT {
     @Autowired
     JdbcTemplate jdbc;
 
-    @AfterEach
-    void tearDown() {
-        jdbc.execute("DELETE FROM invoice_line_items");
-        jdbc.execute("DELETE FROM invoices");
-        jdbc.execute("DELETE FROM ledger_entries");
-        jdbc.execute("DELETE FROM usage_records");
-        subscriptionRepository.deleteAll();
-        jdbc.execute("DELETE FROM plan_metric_limits");
-        planRepository.deleteAll();
-        tenantRepository.deleteAll();
-    }
-
     @BeforeEach
     void setUp() {
+        cleanup();
+    }
+
+    @AfterEach
+    void tearDown() {
+        cleanup();
+    }
+
+    private void cleanup() {
         jdbc.execute("DELETE FROM invoice_line_items");
         jdbc.execute("DELETE FROM invoices");
         jdbc.execute("DELETE FROM ledger_entries");
@@ -86,15 +73,12 @@ class PlanChangeIT {
         Tenant tenant = createTenant("Plan Change Corp", "planchange@example.com");
         Plan basicPlan = createPlan("Basic", "basic-change", 3000L);
         Plan proPlan = createPlan("Pro", "pro-change", 6000L);
-        Subscription subscription = createSubscription(tenant.getId(), basicPlan.getId());
-
-        HttpHeaders headers = headersWithTenantId(tenant.getId());
-        var request = new ChangePlanRequest(proPlan.getId());
+        createSubscription(tenant.getId(), basicPlan.getId());
 
         ResponseEntity<InvoiceResponse> response = rest.exchange(
                 "/api/v1/subscriptions/current/change-plan",
                 HttpMethod.POST,
-                new HttpEntity<>(request, headers),
+                new HttpEntity<>(new ChangePlanRequest(proPlan.getId()), userHeaders(tenant.getId())),
                 InvoiceResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -103,13 +87,8 @@ class PlanChangeIT {
         assertThat(body).isNotNull();
         assertThat(body.status()).isEqualTo("PAID");
         assertThat(body.lineItems()).hasSize(2);
-
-        boolean hasCredit = body.lineItems().stream()
-                .anyMatch(li -> li.type().equals("PRORATION_CREDIT"));
-        boolean hasCharge = body.lineItems().stream()
-                .anyMatch(li -> li.type().equals("PRORATION_CHARGE"));
-        assertThat(hasCredit).isTrue();
-        assertThat(hasCharge).isTrue();
+        assertThat(body.lineItems()).anyMatch(li -> li.type().equals("PRORATION_CREDIT"));
+        assertThat(body.lineItems()).anyMatch(li -> li.type().equals("PRORATION_CHARGE"));
 
         Subscription updated = subscriptionRepository.findByTenantIdAndStatus(tenant.getId(), SubscriptionStatus.ACTIVE)
                 .orElseThrow();
@@ -126,24 +105,19 @@ class PlanChangeIT {
         Plan proPlan = createPlan("Pro", "pro-fail", 6000L);
         createSubscription(tenant.getId(), basicPlan.getId());
 
-        HttpHeaders headers = headersWithTenantId(tenant.getId());
+        HttpHeaders headers = userHeaders(tenant.getId());
         headers.set("X-Mock-Gateway-Result", "FAIL");
-        var request = new ChangePlanRequest(proPlan.getId());
 
         ResponseEntity<InvoiceResponse> response = rest.exchange(
                 "/api/v1/subscriptions/current/change-plan",
                 HttpMethod.POST,
-                new HttpEntity<>(request, headers),
+                new HttpEntity<>(new ChangePlanRequest(proPlan.getId()), headers),
                 InvoiceResponse.class);
 
         assertThat(response.getStatusCode().value()).isEqualTo(402);
-
-        InvoiceResponse body = response.getBody();
-        assertThat(body).isNotNull();
-        assertThat(body.status()).isEqualTo("FINALIZED");
-
-        boolean isPastDue = subscriptionRepository.existsByTenantIdAndStatus(tenant.getId(), SubscriptionStatus.PAST_DUE);
-        assertThat(isPastDue).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().status()).isEqualTo("FINALIZED");
+        assertThat(subscriptionRepository.existsByTenantIdAndStatus(tenant.getId(), SubscriptionStatus.PAST_DUE)).isTrue();
     }
 
     @Test
@@ -152,25 +126,16 @@ class PlanChangeIT {
         Plan basicPlan = createPlan("Basic", "basic-same", 3000L);
         createSubscription(tenant.getId(), basicPlan.getId());
 
-        HttpHeaders headers = headersWithTenantId(tenant.getId());
-        var request = new ChangePlanRequest(basicPlan.getId());
-
         ResponseEntity<String> response = rest.exchange(
                 "/api/v1/subscriptions/current/change-plan",
                 HttpMethod.POST,
-                new HttpEntity<>(request, headers),
+                new HttpEntity<>(new ChangePlanRequest(basicPlan.getId()), userHeaders(tenant.getId())),
                 String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getHeaders().getContentType()).isNotNull();
         assertThat(response.getHeaders().getContentType().toString())
                 .contains("application/problem+json");
-    }
-
-    private HttpHeaders headersWithTenantId(UUID tenantId) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("X-Tenant-ID", tenantId.toString());
-        return headers;
     }
 
     private Tenant createTenant(String name, String email) {

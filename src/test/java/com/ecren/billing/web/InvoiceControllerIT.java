@@ -1,6 +1,6 @@
 package com.ecren.billing.web;
 
-import com.ecren.billing.TestcontainersConfiguration;
+import com.ecren.billing.BaseIT;
 import com.ecren.billing.domain.Invoice;
 import com.ecren.billing.domain.InvoiceLineItem;
 import com.ecren.billing.domain.Plan;
@@ -19,27 +19,16 @@ import com.ecren.billing.repository.TenantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.context.annotation.Import;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(TestcontainersConfiguration.class)
-@ActiveProfiles("test")
-class InvoiceControllerIT {
-
-    @Autowired
-    TestRestTemplate rest;
+class InvoiceControllerIT extends BaseIT {
 
     @Autowired
     InvoiceRepository invoiceRepository;
@@ -93,7 +82,7 @@ class InvoiceControllerIT {
         ResponseEntity<PageResponse<Map<String, Object>>> response = rest.exchange(
                 "/api/v1/invoices?page=0&size=20",
                 HttpMethod.GET,
-                new HttpEntity<>(headersWithTenantId(tenant.getId())),
+                new HttpEntity<>(userHeaders(tenant.getId())),
                 new ParameterizedTypeReference<>() {});
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -109,16 +98,14 @@ class InvoiceControllerIT {
     @Test
     void getInvoice_givenExistingId_thenReturnsInvoiceWithLineItems() {
         Invoice invoice = buildInvoice(InvoiceStatus.DRAFT);
-        InvoiceLineItem item1 = buildLineItem(invoice, LineItemType.BASE_FEE, "Base fee", 999L);
-        InvoiceLineItem item2 = buildLineItem(invoice, LineItemType.USAGE_OVERAGE, "Usage overage", 200L);
-        invoice.getLineItems().add(item1);
-        invoice.getLineItems().add(item2);
+        invoice.getLineItems().add(buildLineItem(invoice, LineItemType.BASE_FEE, "Base fee", 999L));
+        invoice.getLineItems().add(buildLineItem(invoice, LineItemType.USAGE_OVERAGE, "Usage overage", 200L));
         invoice = invoiceRepository.save(invoice);
 
         ResponseEntity<InvoiceResponse> response = rest.exchange(
                 "/api/v1/invoices/" + invoice.getId(),
                 HttpMethod.GET,
-                new HttpEntity<>(headersWithTenantId(tenant.getId())),
+                new HttpEntity<>(userHeaders(tenant.getId())),
                 InvoiceResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -130,15 +117,13 @@ class InvoiceControllerIT {
 
     @Test
     void getInvoice_givenDifferentTenantInvoice_thenReturns404() {
-        Invoice invoice = buildInvoice(InvoiceStatus.DRAFT);
-        invoice = invoiceRepository.save(invoice);
+        Invoice invoice = invoiceRepository.save(buildInvoice(InvoiceStatus.DRAFT));
 
-        UUID otherTenantId = UUID.randomUUID();
-
+        // Token scoped to a different (non-existent) tenant — service can't find the invoice
         ResponseEntity<String> response = rest.exchange(
                 "/api/v1/invoices/" + invoice.getId(),
                 HttpMethod.GET,
-                new HttpEntity<>(headersWithTenantId(otherTenantId)),
+                new HttpEntity<>(userHeaders(UUID.randomUUID())),
                 String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
@@ -151,13 +136,12 @@ class InvoiceControllerIT {
         ResponseEntity<InvoiceResponse> response = rest.exchange(
                 "/api/v1/invoices/" + invoice.getId() + "/void",
                 HttpMethod.POST,
-                new HttpEntity<>(headersWithTenantId(tenant.getId())),
+                new HttpEntity<>(userHeaders(tenant.getId())),
                 InvoiceResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        InvoiceResponse body = response.getBody();
-        assertThat(body).isNotNull();
-        assertThat(body.status()).isEqualTo("VOID");
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().status()).isEqualTo("VOID");
     }
 
     @Test
@@ -167,13 +151,12 @@ class InvoiceControllerIT {
         ResponseEntity<InvoiceResponse> response = rest.exchange(
                 "/api/v1/invoices/" + invoice.getId() + "/void",
                 HttpMethod.POST,
-                new HttpEntity<>(headersWithTenantId(tenant.getId())),
+                new HttpEntity<>(userHeaders(tenant.getId())),
                 InvoiceResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        InvoiceResponse body = response.getBody();
-        assertThat(body).isNotNull();
-        assertThat(body.status()).isEqualTo("VOID");
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().status()).isEqualTo("VOID");
     }
 
     @Test
@@ -183,19 +166,13 @@ class InvoiceControllerIT {
         ResponseEntity<String> response = rest.exchange(
                 "/api/v1/invoices/" + invoice.getId() + "/void",
                 HttpMethod.POST,
-                new HttpEntity<>(headersWithTenantId(tenant.getId())),
+                new HttpEntity<>(userHeaders(tenant.getId())),
                 String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getHeaders().getContentType()).isNotNull();
         assertThat(response.getHeaders().getContentType().toString())
                 .contains("application/problem+json");
-    }
-
-    private HttpHeaders headersWithTenantId(UUID tenantId) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("X-Tenant-ID", tenantId.toString());
-        return headers;
     }
 
     private Invoice buildInvoice(InvoiceStatus status) {

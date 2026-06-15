@@ -1,6 +1,6 @@
 package com.ecren.billing.web;
 
-import com.ecren.billing.TestcontainersConfiguration;
+import com.ecren.billing.BaseIT;
 import com.ecren.billing.domain.Plan;
 import com.ecren.billing.domain.Tenant;
 import com.ecren.billing.domain.enums.PlanStatus;
@@ -13,25 +13,15 @@ import com.ecren.billing.repository.TenantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.*;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(TestcontainersConfiguration.class)
-@ActiveProfiles("test")
-class SubscriptionLifecycleIT {
-
-    @Autowired
-    TestRestTemplate rest;
+class SubscriptionLifecycleIT extends BaseIT {
 
     @Autowired
     SubscriptionRepository subscriptionRepository;
@@ -60,11 +50,10 @@ class SubscriptionLifecycleIT {
         Plan plan = createPlan("Basic", "basic-sub");
 
         var request = new CreateSubscriptionRequest(plan.getId());
-        HttpHeaders headers = headersWithTenantId(tenant.getId());
 
         ResponseEntity<SubscriptionResponse> response = rest.exchange(
                 "/api/v1/subscriptions", HttpMethod.POST,
-                new HttpEntity<>(request, headers), SubscriptionResponse.class);
+                new HttpEntity<>(request, userHeaders(tenant.getId())), SubscriptionResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getHeaders().getLocation()).isNotNull();
@@ -86,7 +75,7 @@ class SubscriptionLifecycleIT {
         Tenant tenant = createTenant("Get Sub Corp", "getsubcorp@example.com");
         Plan plan = createPlan("Pro", "pro-get");
 
-        HttpHeaders headers = headersWithTenantId(tenant.getId());
+        HttpHeaders headers = userHeaders(tenant.getId());
         rest.exchange("/api/v1/subscriptions", HttpMethod.POST,
                 new HttpEntity<>(new CreateSubscriptionRequest(plan.getId()), headers),
                 SubscriptionResponse.class);
@@ -106,7 +95,7 @@ class SubscriptionLifecycleIT {
         Tenant tenant = createTenant("Cancel Corp", "cancelcorp@example.com");
         Plan plan = createPlan("Enterprise", "enterprise-cancel");
 
-        HttpHeaders headers = headersWithTenantId(tenant.getId());
+        HttpHeaders headers = userHeaders(tenant.getId());
         rest.exchange("/api/v1/subscriptions", HttpMethod.POST,
                 new HttpEntity<>(new CreateSubscriptionRequest(plan.getId()), headers),
                 SubscriptionResponse.class);
@@ -127,7 +116,7 @@ class SubscriptionLifecycleIT {
         Tenant tenant = createTenant("Dup Sub Corp", "dupsubcorp@example.com");
         Plan plan = createPlan("Starter", "starter-dup");
 
-        HttpHeaders headers = headersWithTenantId(tenant.getId());
+        HttpHeaders headers = userHeaders(tenant.getId());
         rest.exchange("/api/v1/subscriptions", HttpMethod.POST,
                 new HttpEntity<>(new CreateSubscriptionRequest(plan.getId()), headers),
                 SubscriptionResponse.class);
@@ -147,23 +136,15 @@ class SubscriptionLifecycleIT {
     void subscribe_givenUnknownPlan_thenReturns404() {
         Tenant tenant = createTenant("No Plan Corp", "noplancorp@example.com");
 
-        HttpHeaders headers = headersWithTenantId(tenant.getId());
-        var request = new CreateSubscriptionRequest(UUID.randomUUID());
-
         ResponseEntity<String> response = rest.exchange(
                 "/api/v1/subscriptions", HttpMethod.POST,
-                new HttpEntity<>(request, headers), String.class);
+                new HttpEntity<>(new CreateSubscriptionRequest(UUID.randomUUID()), userHeaders(tenant.getId())),
+                String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getHeaders().getContentType()).isNotNull();
         assertThat(response.getHeaders().getContentType().toString())
                 .contains("application/problem+json");
-    }
-
-    private HttpHeaders headersWithTenantId(UUID tenantId) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("X-Tenant-ID", tenantId.toString());
-        return headers;
     }
 
     private Tenant createTenant(String name, String email) {

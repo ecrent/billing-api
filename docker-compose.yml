@@ -22,11 +22,23 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/billing
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
       SPRING_PROFILES_ACTIVE: dev
     # depends_on with health check ensures Flyway doesn't run before postgres is ready.
     depends_on:
       postgres:
         condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
 
   adminer:
     image: adminer

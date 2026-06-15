@@ -1,6 +1,6 @@
 package com.ecren.billing.web;
 
-import com.ecren.billing.TestcontainersConfiguration;
+import com.ecren.billing.BaseIT;
 import com.ecren.billing.domain.Plan;
 import com.ecren.billing.domain.PlanMetricLimit;
 import com.ecren.billing.domain.Subscription;
@@ -19,26 +19,15 @@ import com.ecren.billing.repository.UsageRecordRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.*;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(TestcontainersConfiguration.class)
-@ActiveProfiles("test")
-class UsageReportingIT {
-
-    @Autowired
-    TestRestTemplate rest;
+class UsageReportingIT extends BaseIT {
 
     @Autowired
     UsageRecordRepository usageRecordRepository;
@@ -56,7 +45,6 @@ class UsageReportingIT {
     JdbcTemplate jdbc;
 
     private Tenant tenant;
-    private Plan plan;
     private Subscription subscription;
 
     @BeforeEach
@@ -77,13 +65,12 @@ class UsageReportingIT {
         tenant.setStatus(TenantStatus.ACTIVE);
         tenant = tenantRepository.save(tenant);
 
-        plan = new Plan();
+        Plan plan = new Plan();
         plan.setName("Basic");
         plan.setSlug("basic-usage");
         plan.setBasePriceCents(999L);
         plan.setBillingInterval("MONTHLY");
         plan.setStatus(PlanStatus.ACTIVE);
-        plan = planRepository.save(plan);
 
         PlanMetricLimit apiLimit = new PlanMetricLimit();
         apiLimit.setPlan(plan);
@@ -111,12 +98,10 @@ class UsageReportingIT {
 
     @Test
     void reportUsage_givenValidRequest_thenReturns201() {
-        var request = new ReportUsageRequest(UsageMetric.API_CALLS, 10L, "key-001");
-        HttpHeaders headers = headersWithTenantId(tenant.getId());
-
         ResponseEntity<UsageRecordResponse> response = rest.exchange(
                 "/api/v1/usage", HttpMethod.POST,
-                new HttpEntity<>(request, headers), UsageRecordResponse.class);
+                new HttpEntity<>(new ReportUsageRequest(UsageMetric.API_CALLS, 10L, "key-001"), userHeaders(tenant.getId())),
+                UsageRecordResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         UsageRecordResponse body = response.getBody();
@@ -130,18 +115,15 @@ class UsageReportingIT {
 
     @Test
     void reportUsage_givenDuplicateIdempotencyKey_thenReturns200WithSameRecord() {
+        HttpHeaders headers = userHeaders(tenant.getId());
         var request = new ReportUsageRequest(UsageMetric.API_CALLS, 10L, "key-dup");
-        HttpHeaders headers = headersWithTenantId(tenant.getId());
 
         ResponseEntity<UsageRecordResponse> first = rest.exchange(
-                "/api/v1/usage", HttpMethod.POST,
-                new HttpEntity<>(request, headers), UsageRecordResponse.class);
+                "/api/v1/usage", HttpMethod.POST, new HttpEntity<>(request, headers), UsageRecordResponse.class);
         assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
         ResponseEntity<UsageRecordResponse> second = rest.exchange(
-                "/api/v1/usage", HttpMethod.POST,
-                new HttpEntity<>(request, headers), UsageRecordResponse.class);
-
+                "/api/v1/usage", HttpMethod.POST, new HttpEntity<>(request, headers), UsageRecordResponse.class);
         assertThat(second.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(second.getBody()).isNotNull();
         assertThat(second.getBody().usageRecordId()).isEqualTo(first.getBody().usageRecordId());
@@ -149,9 +131,7 @@ class UsageReportingIT {
 
     @Test
     void getUsageSummary_givenUsageReported_thenShowsConsumedAndOverage() {
-        HttpHeaders headers = headersWithTenantId(tenant.getId());
-
-        // Report 150 API calls — 50 over the 100 included
+        HttpHeaders headers = userHeaders(tenant.getId());
         rest.exchange("/api/v1/usage", HttpMethod.POST,
                 new HttpEntity<>(new ReportUsageRequest(UsageMetric.API_CALLS, 150L, "key-summary-1"), headers),
                 UsageRecordResponse.class);
@@ -168,7 +148,6 @@ class UsageReportingIT {
         UsageSummaryResponse.MetricSummary apiSummary = body.metrics().stream()
                 .filter(m -> m.metric().equals("API_CALLS"))
                 .findFirst().orElseThrow();
-
         assertThat(apiSummary.consumed()).isEqualTo(150L);
         assertThat(apiSummary.included()).isEqualTo(100L);
         assertThat(apiSummary.overage()).isEqualTo(50L);
@@ -176,11 +155,9 @@ class UsageReportingIT {
 
     @Test
     void getUsageSummary_givenNoUsage_thenShowsZeroConsumed() {
-        HttpHeaders headers = headersWithTenantId(tenant.getId());
-
         ResponseEntity<UsageSummaryResponse> response = rest.exchange(
                 "/api/v1/usage/summary", HttpMethod.GET,
-                new HttpEntity<>(headers), UsageSummaryResponse.class);
+                new HttpEntity<>(userHeaders(tenant.getId())), UsageSummaryResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         UsageSummaryResponse body = response.getBody();
@@ -196,19 +173,11 @@ class UsageReportingIT {
     void reportUsage_givenNoActiveSubscription_thenReturns404() {
         subscriptionRepository.deleteAll();
 
-        var request = new ReportUsageRequest(UsageMetric.API_CALLS, 5L, "key-nosub");
-        HttpHeaders headers = headersWithTenantId(tenant.getId());
-
         ResponseEntity<String> response = rest.exchange(
                 "/api/v1/usage", HttpMethod.POST,
-                new HttpEntity<>(request, headers), String.class);
+                new HttpEntity<>(new ReportUsageRequest(UsageMetric.API_CALLS, 5L, "key-nosub"), userHeaders(tenant.getId())),
+                String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-    }
-
-    private HttpHeaders headersWithTenantId(UUID tenantId) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("X-Tenant-ID", tenantId.toString());
-        return headers;
     }
 }

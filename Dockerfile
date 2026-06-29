@@ -11,7 +11,7 @@ RUN mvn package -DskipTests -q
 
 # Stage 2: Runtime
 # Alpine JRE is ~100MB vs ~300MB for the full JDK image.
-FROM eclipse-temurin:21-jre-alpine@sha256:704db3c40204a44f471191446ddd9cda5d60dab40f0e15c6507b815ed897238b
+FROM eclipse-temurin:21-jre-alpine@sha256:3f08b13888f595cc49edabea7250ba69499ba25602b267da591720769400e08c
 WORKDIR /app
 RUN addgroup -S billing && adduser -S billing -G billing
 USER billing

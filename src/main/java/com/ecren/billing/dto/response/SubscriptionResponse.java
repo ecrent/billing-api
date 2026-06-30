@@ -8,6 +8,7 @@ public record SubscriptionResponse(
         UUID subscriptionId,
         UUID tenantId,
         UUID planId,
+        UUID pendingPlanId,
         String status,
         LocalDate currentPeriodStart,
         LocalDate currentPeriodEnd,

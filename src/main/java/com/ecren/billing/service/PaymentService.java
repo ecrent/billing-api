@@ -1,8 +1,10 @@
 package com.ecren.billing.service;
 
+import com.ecren.billing.common.DemoClock;
 import com.ecren.billing.common.TenantContext;
 import com.ecren.billing.domain.LedgerEntry;
 import com.ecren.billing.domain.Payment;
+import com.ecren.billing.domain.Tenant;
 import com.ecren.billing.domain.enums.InvoiceStatus;
 import com.ecren.billing.domain.enums.LedgerEntryType;
 import com.ecren.billing.domain.enums.PaymentStatus;
@@ -11,6 +13,7 @@ import com.ecren.billing.dto.request.AttemptPaymentRequest;
 import com.ecren.billing.dto.response.LedgerEntryResponse;
 import com.ecren.billing.dto.response.LedgerSummaryResponse;
 import com.ecren.billing.dto.response.PaymentResponse;
+import com.ecren.billing.dto.response.WalletResponse;
 import com.ecren.billing.exception.ConflictException;
 import com.ecren.billing.exception.ResourceNotFoundException;
 import com.ecren.billing.gateway.GatewayResult;
@@ -21,10 +24,10 @@ import com.ecren.billing.repository.InvoiceRepository;
 import com.ecren.billing.repository.LedgerEntryRepository;
 import com.ecren.billing.repository.PaymentRepository;
 import com.ecren.billing.repository.SubscriptionRepository;
+import com.ecren.billing.repository.TenantRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,24 +41,30 @@ public class PaymentService {
     private final InvoiceRepository invoiceRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final TenantRepository tenantRepository;
     private final PaymentGateway paymentGateway;
     private final PaymentMapper mapper;
     private final LedgerMapper ledgerMapper;
+    private final DemoClock clock;
 
     public PaymentService(PaymentRepository repository,
                           InvoiceRepository invoiceRepository,
                           LedgerEntryRepository ledgerEntryRepository,
                           SubscriptionRepository subscriptionRepository,
+                          TenantRepository tenantRepository,
                           PaymentGateway paymentGateway,
                           PaymentMapper mapper,
-                          LedgerMapper ledgerMapper) {
+                          LedgerMapper ledgerMapper,
+                          DemoClock clock) {
         this.repository = repository;
         this.invoiceRepository = invoiceRepository;
         this.ledgerEntryRepository = ledgerEntryRepository;
         this.subscriptionRepository = subscriptionRepository;
+        this.tenantRepository = tenantRepository;
         this.paymentGateway = paymentGateway;
         this.mapper = mapper;
         this.ledgerMapper = ledgerMapper;
+        this.clock = clock;
     }
 
     @Transactional
@@ -82,7 +91,7 @@ public class PaymentService {
         payment.setIdempotencyKey(request.idempotencyKey());
         payment = repository.save(payment);
 
-        GatewayResult result = paymentGateway.charge(invoice.getTotalCents(), payment.getId().toString());
+        GatewayResult result = paymentGateway.charge(tenantId, invoice.getTotalCents(), payment.getId().toString());
 
         if (result.success()) {
             payment.setStatus(PaymentStatus.SUCCEEDED);
@@ -90,7 +99,7 @@ public class PaymentService {
             payment = repository.save(payment);
 
             invoice.setStatus(InvoiceStatus.PAID);
-            invoice.setPaidAt(LocalDateTime.now());
+            invoice.setPaidAt(clock.now());
             invoiceRepository.save(invoice);
 
             LedgerEntry charge = new LedgerEntry();
@@ -131,6 +140,13 @@ public class PaymentService {
         long balanceCents = entries.stream().mapToLong(LedgerEntry::getAmountCents).sum();
         List<LedgerEntryResponse> responses = entries.stream().map(ledgerMapper::toResponse).toList();
         return new LedgerSummaryResponse(responses, balanceCents);
+    }
+
+    public WalletResponse getWallet() {
+        UUID tenantId = TenantContext.get();
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant not found: " + tenantId));
+        return new WalletResponse(tenant.getWalletBalanceCents());
     }
 
     public PaymentResponse getPayment(UUID id) {

@@ -1,5 +1,6 @@
 package com.ecren.billing.service;
 
+import com.ecren.billing.common.DemoClock;
 import com.ecren.billing.common.TenantContext;
 import com.ecren.billing.domain.Invoice;
 import com.ecren.billing.domain.Plan;
@@ -8,6 +9,7 @@ import com.ecren.billing.domain.enums.InvoiceStatus;
 import com.ecren.billing.domain.enums.LineItemType;
 import com.ecren.billing.domain.enums.SubscriptionStatus;
 import com.ecren.billing.dto.request.ChangePlanRequest;
+import com.ecren.billing.dto.response.ChangePlanResponse;
 import com.ecren.billing.dto.response.InvoiceResponse;
 import com.ecren.billing.dto.response.LineItemResponse;
 import com.ecren.billing.gateway.GatewayResult;
@@ -51,6 +53,8 @@ class PlanChangeServiceTest {
     PaymentGateway paymentGateway;
     @Mock
     InvoiceMapper invoiceMapper;
+    @Mock
+    DemoClock clock;
 
     @InjectMocks
     PlanChangeService service;
@@ -87,13 +91,14 @@ class PlanChangeServiceTest {
                 .thenReturn(Optional.of(subscription));
         when(planRepository.findById(oldPlanId)).thenReturn(Optional.of(oldPlan));
         when(planRepository.findById(newPlanId)).thenReturn(Optional.of(newPlan));
+        when(clock.today()).thenReturn(today);
         when(invoiceRepository.save(any())).thenAnswer(inv -> assignId(inv.getArgument(0)));
         when(subscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(paymentGateway.charge(anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-001", "OK"));
+        when(paymentGateway.charge(any(), anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-001", "OK"));
         when(invoiceMapper.toResponse(any(Invoice.class))).thenReturn(stubInvoiceResponse());
 
-        ResponseEntity<InvoiceResponse> result = service.changePlan(new ChangePlanRequest(newPlanId));
+        ResponseEntity<ChangePlanResponse> result = service.changePlan(new ChangePlanRequest(newPlanId));
 
         ArgumentCaptor<Invoice> invoiceCaptor = ArgumentCaptor.forClass(Invoice.class);
         verify(invoiceRepository, atLeastOnce()).save(invoiceCaptor.capture());
@@ -131,10 +136,11 @@ class PlanChangeServiceTest {
                 .thenReturn(Optional.of(subscription));
         when(planRepository.findById(oldPlanId)).thenReturn(Optional.of(oldPlan));
         when(planRepository.findById(newPlanId)).thenReturn(Optional.of(newPlan));
+        when(clock.today()).thenReturn(today);
         when(invoiceRepository.save(any())).thenAnswer(inv -> assignId(inv.getArgument(0)));
         when(subscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(paymentGateway.charge(anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-002", "OK"));
+        when(paymentGateway.charge(any(), anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-002", "OK"));
         when(invoiceMapper.toResponse(any(Invoice.class))).thenReturn(stubInvoiceResponse());
 
         service.changePlan(new ChangePlanRequest(newPlanId));
@@ -174,10 +180,11 @@ class PlanChangeServiceTest {
                 .thenReturn(Optional.of(subscription));
         when(planRepository.findById(oldPlanId)).thenReturn(Optional.of(oldPlan));
         when(planRepository.findById(newPlanId)).thenReturn(Optional.of(newPlan));
+        when(clock.today()).thenReturn(today);
         when(invoiceRepository.save(any())).thenAnswer(inv -> assignId(inv.getArgument(0)));
         when(subscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(ledgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(paymentGateway.charge(anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-003", "OK"));
+        when(paymentGateway.charge(any(), anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-003", "OK"));
         when(invoiceMapper.toResponse(any(Invoice.class))).thenReturn(stubInvoiceResponse());
 
         service.changePlan(new ChangePlanRequest(newPlanId));
@@ -202,6 +209,67 @@ class PlanChangeServiceTest {
         assertThat(charge.getQuantity()).isEqualTo(1L);
         assertThat(charge.getAmountCents()).isEqualTo(200L);
         assertThat(savedInvoice.getTotalCents()).isEqualTo(100L);
+    }
+
+    @Test
+    void changePlan_givenDowngrade_thenScheduledForNextPeriodWithoutInvoice() {
+        LocalDate today = LocalDate.now();
+        LocalDate periodStart = today.minusDays(9);
+        LocalDate periodEnd = today.plusDays(20);
+
+        Subscription subscription = buildSubscription(oldPlanId, periodStart, periodEnd);
+        Plan oldPlan = buildPlan(oldPlanId, "Pro", 6000L);
+        Plan newPlan = buildPlan(newPlanId, "Basic", 3000L); // cheaper -> downgrade
+
+        when(subscriptionRepository.findByTenantIdAndStatus(tenantId, SubscriptionStatus.ACTIVE))
+                .thenReturn(Optional.of(subscription));
+        when(planRepository.findById(oldPlanId)).thenReturn(Optional.of(oldPlan));
+        when(planRepository.findById(newPlanId)).thenReturn(Optional.of(newPlan));
+        when(subscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ResponseEntity<ChangePlanResponse> result = service.changePlan(new ChangePlanRequest(newPlanId));
+
+        // No invoice/charge/ledger activity for a deferred downgrade.
+        verifyNoInteractions(invoiceRepository, paymentGateway, ledgerEntryRepository, invoiceMapper);
+
+        ArgumentCaptor<Subscription> subCaptor = ArgumentCaptor.forClass(Subscription.class);
+        verify(subscriptionRepository).save(subCaptor.capture());
+        assertThat(subCaptor.getValue().getPlanId()).isEqualTo(oldPlanId); // unchanged until period rolls over
+        assertThat(subCaptor.getValue().getPendingPlanId()).isEqualTo(newPlanId);
+
+        assertThat(result.getStatusCode().value()).isEqualTo(200);
+        assertThat(result.getBody().invoice()).isNull();
+        assertThat(result.getBody().message()).contains("Basic").contains(periodEnd.plusDays(1).toString());
+    }
+
+    @Test
+    void changePlan_givenUpgradeAfterPendingDowngrade_thenDowngradeIsCancelled() {
+        LocalDate today = LocalDate.now();
+        LocalDate periodStart = today;
+        LocalDate periodEnd = today.plusDays(29);
+
+        Subscription subscription = buildSubscription(oldPlanId, periodStart, periodEnd);
+        subscription.setPendingPlanId(UUID.randomUUID()); // a downgrade was scheduled earlier
+        Plan oldPlan = buildPlan(oldPlanId, "Basic", 3000L);
+        Plan newPlan = buildPlan(newPlanId, "Pro", 6000L);
+
+        when(subscriptionRepository.findByTenantIdAndStatus(tenantId, SubscriptionStatus.ACTIVE))
+                .thenReturn(Optional.of(subscription));
+        when(planRepository.findById(oldPlanId)).thenReturn(Optional.of(oldPlan));
+        when(planRepository.findById(newPlanId)).thenReturn(Optional.of(newPlan));
+        when(clock.today()).thenReturn(today);
+        when(invoiceRepository.save(any())).thenAnswer(inv -> assignId(inv.getArgument(0)));
+        when(subscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(ledgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentGateway.charge(any(), anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-004", "OK"));
+        when(invoiceMapper.toResponse(any(Invoice.class))).thenReturn(stubInvoiceResponse());
+
+        service.changePlan(new ChangePlanRequest(newPlanId));
+
+        ArgumentCaptor<Subscription> subCaptor = ArgumentCaptor.forClass(Subscription.class);
+        verify(subscriptionRepository).save(subCaptor.capture());
+        assertThat(subCaptor.getValue().getPlanId()).isEqualTo(newPlanId);
+        assertThat(subCaptor.getValue().getPendingPlanId()).isNull();
     }
 
     private Subscription buildSubscription(UUID planId, LocalDate periodStart, LocalDate periodEnd) {

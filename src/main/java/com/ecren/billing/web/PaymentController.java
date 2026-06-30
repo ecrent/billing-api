@@ -2,6 +2,7 @@ package com.ecren.billing.web;
 
 import com.ecren.billing.dto.request.AttemptPaymentRequest;
 import com.ecren.billing.dto.response.PaymentResponse;
+import com.ecren.billing.dto.response.WalletResponse;
 import com.ecren.billing.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,6 +33,12 @@ public class PaymentController {
             return ResponseEntity.ok(result.response());
         }
         return ResponseEntity.created(URI.create("/api/v1/payments/" + result.response().paymentId())).body(result.response());
+    }
+
+    @Operation(summary = "Get demo wallet balance")
+    @GetMapping("/wallet")
+    public WalletResponse getWallet() {
+        return service.getWallet();
     }
 
     @Operation(summary = "Get payment by ID")

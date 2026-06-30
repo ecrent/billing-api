@@ -7,6 +7,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('user-avatar').textContent = claims.email[0].toUpperCase();
   document.getElementById('logout-btn').addEventListener('click', logout);
 
+  const pages = {
+    overview: loadOverview,
+    subscription: loadSubscription,
+    invoices: loadInvoices,
+    usage: loadUsage,
+    payments: loadPayments,
+  };
+
   // Nav
   document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', () => {
@@ -20,22 +28,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Load overview by default
-  await loadOverview();
-
-  const pages = {
-    overview: loadOverview,
-    subscription: loadSubscription,
-    invoices: loadInvoices,
-    usage: loadUsage,
-    payments: loadPayments,
-  };
-
-  // Kick off current page
+  // Load whichever page is active by default (overview)
   const activeNav = document.querySelector('.nav-item.active');
-  if (activeNav?.dataset.page) {
-    pages[activeNav.dataset.page]?.();
-  }
+  pages[activeNav?.dataset.page ?? 'overview']?.();
 });
 
 function logout() {
@@ -53,12 +48,10 @@ async function loadOverview() {
 
     if (subRes.ok) {
       const sub = await subRes.json();
-      document.getElementById('stat-plan').textContent = sub.planId ? 'Active' : '—';
       document.getElementById('stat-period').textContent =
         sub.currentPeriodEnd ? formatDate(sub.currentPeriodEnd) : '—';
       document.getElementById('stat-status').innerHTML = statusBadge(sub.status);
     } else {
-      document.getElementById('stat-plan').textContent = 'None';
       document.getElementById('stat-period').textContent = '—';
       document.getElementById('stat-status').innerHTML = statusBadge('CANCELLED');
     }
@@ -71,6 +64,9 @@ async function loadOverview() {
     if (usageRes.ok) {
       const usage = await usageRes.json();
       renderOverviewUsage(usage.metrics || []);
+    } else {
+      document.getElementById('overview-usage').innerHTML =
+        '<p class="empty-state">No active subscription — pick a plan to start tracking usage.</p>';
     }
   } catch (err) {
     console.error(err);
@@ -100,15 +96,25 @@ async function loadSubscription() {
   const res = await apiGet('/subscriptions/current');
   if (!res.ok) {
     el.innerHTML = `<div class="empty-state"><p>No active subscription.</p><br>
-      <a href="#" class="btn btn-primary btn-sm" onclick="showPlanSelect(); return false;">Subscribe to a plan</a>
+      <p style="color:var(--muted);font-size:13px;">Pick a plan below to get started.</p>
     </div>`;
-    await loadPlanOptions();
+    await loadPlanOptions('subscribe');
     return;
   }
 
   const sub = await res.json();
   const planRes = await apiGet('/plans/' + sub.planId);
   const plan = planRes.ok ? await planRes.json() : null;
+
+  let pendingNotice = '';
+  if (sub.pendingPlanId) {
+    const pendingPlanRes = await apiGet('/plans/' + sub.pendingPlanId);
+    const pendingPlan = pendingPlanRes.ok ? await pendingPlanRes.json() : null;
+    pendingNotice = `<div class="card" style="border-color:var(--warning,#caa53d);margin-top:12px;">
+      Switching to <strong>${pendingPlan?.name ?? 'a new plan'}</strong> at the start of your next
+      billing period on ${formatDate(sub.currentPeriodEnd)}.
+    </div>`;
+  }
 
   el.innerHTML = `
     <div class="card">
@@ -130,7 +136,8 @@ async function loadSubscription() {
         <button class="btn btn-ghost btn-sm" onclick="loadChangePlan()">Change plan</button>
         <button class="btn btn-danger btn-sm" onclick="cancelSub()">Cancel</button>
       </div>
-    </div>`;
+    </div>
+    ${pendingNotice}`;
 }
 
 async function cancelSub() {
@@ -144,17 +151,18 @@ async function cancelSub() {
   }
 }
 
-async function loadPlanOptions() {
+async function loadPlanOptions(mode = 'subscribe') {
   const res = await apiGet('/plans');
   if (!res.ok) return;
   const plans = await res.json();
   const el = document.getElementById('plan-select-area');
   if (!el) return;
+  const handler = mode === 'change' ? 'changePlanTo' : 'subscribeToPlan';
   el.style.display = 'block';
-  el.innerHTML = `<div class="card"><div class="card-title">Available Plans</div>
+  el.innerHTML = `<div class="card"><div class="card-title">${mode === 'change' ? 'Choose a New Plan' : 'Available Plans'}</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
       ${plans.map(p => `
-        <div class="card" style="margin:0;cursor:pointer;" onclick="subscribeToPlan('${p.planId}')">
+        <div class="card" style="margin:0;cursor:pointer;" onclick="${handler}('${p.planId}')">
           <div style="font-weight:700;font-size:16px;">${p.name}</div>
           <div style="font-size:22px;font-weight:700;margin:8px 0;">${formatCents(p.basePriceCents)}<span style="font-size:13px;color:var(--muted)">/mo</span></div>
           ${p.metricLimits.map(m => `<div style="font-size:12px;color:var(--muted);">${m.includedQuantity.toLocaleString()} ${m.metric.replace('_',' ')} included</div>`).join('')}
@@ -173,8 +181,21 @@ async function subscribeToPlan(planId) {
   }
 }
 
+async function changePlanTo(planId) {
+  const res = await apiPost('/subscriptions/current/change-plan', { newPlanId: planId });
+  if (res.ok) {
+    const data = await res.json();
+    showToast(data.message || 'Plan updated.');
+    document.getElementById('plan-select-area').style.display = 'none';
+    loadSubscription();
+  } else {
+    const err = await res.json();
+    showToast(err.message || err.detail || 'Failed to change plan.', 'error');
+  }
+}
+
 async function loadChangePlan() {
-  await loadPlanOptions();
+  await loadPlanOptions('change');
 }
 
 async function loadInvoices() {
@@ -228,6 +249,9 @@ async function loadUsage() {
 }
 
 async function loadPayments() {
+  loadDemoDate();
+  loadWallet();
+
   const el = document.getElementById('payments-list');
   el.innerHTML = '<div class="spinner"></div>';
 
@@ -249,4 +273,43 @@ async function loadPayments() {
       <td>${statusBadge('PAID')}</td>
     </tr>`).join('')}</tbody>
   </table></div>`;
+}
+
+async function loadDemoDate() {
+  const el = document.getElementById('demo-date');
+  if (!el) return;
+  const res = await apiGet('/time');
+  if (res.ok) {
+    const data = await res.json();
+    el.textContent = formatDate(data.today);
+  }
+}
+
+async function loadWallet() {
+  const el = document.getElementById('wallet-balance');
+  if (!el) return;
+  const res = await apiGet('/payments/wallet');
+  if (res.ok) {
+    const data = await res.json();
+    el.textContent = formatCents(data.balanceCents);
+    el.style.color = data.balanceCents <= 0 ? 'var(--danger, #d9534f)' : '';
+  }
+}
+
+async function advanceTime() {
+  const btn = document.getElementById('advance-time-btn');
+  btn.disabled = true;
+  try {
+    const res = await apiPost('/time/advance?days=15', {});
+    if (res.ok) {
+      const data = await res.json();
+      showToast(data.message || 'Time advanced.');
+      document.getElementById('demo-date').textContent = formatDate(data.today);
+      await loadPayments(); // refreshes the payment list, demo date, and wallet balance
+    } else {
+      showToast('Failed to advance time.', 'error');
+    }
+  } finally {
+    btn.disabled = false;
+  }
 }

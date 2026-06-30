@@ -1,5 +1,6 @@
 package com.ecren.billing.service;
 
+import com.ecren.billing.common.DemoClock;
 import com.ecren.billing.domain.Invoice;
 import com.ecren.billing.domain.InvoiceLineItem;
 import com.ecren.billing.domain.LedgerEntry;
@@ -32,8 +33,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
@@ -48,6 +49,7 @@ public class BillingCycleService {
     private final PaymentRepository paymentRepository;
     private final UsageRecordRepository usageRecordRepository;
     private final PaymentGateway paymentGateway;
+    private final DemoClock clock;
 
     // Self-proxy so processTenant()'s @Transactional goes through Spring AOP, not this.processTenant() which bypasses the proxy.
     @Lazy
@@ -60,7 +62,8 @@ public class BillingCycleService {
                                 LedgerEntryRepository ledgerEntryRepository,
                                 PaymentRepository paymentRepository,
                                 UsageRecordRepository usageRecordRepository,
-                                PaymentGateway paymentGateway) {
+                                PaymentGateway paymentGateway,
+                                DemoClock clock) {
         this.subscriptionRepository = subscriptionRepository;
         this.planRepository = planRepository;
         this.invoiceRepository = invoiceRepository;
@@ -68,13 +71,14 @@ public class BillingCycleService {
         this.paymentRepository = paymentRepository;
         this.usageRecordRepository = usageRecordRepository;
         this.paymentGateway = paymentGateway;
+        this.clock = clock;
     }
 
     @Scheduled(cron = "0 5 0 * * *")
     @SchedulerLock(name = "billing_cycle", lockAtMostFor = "PT10M")
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void runBillingCycle() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = clock.today();
         List<Subscription> due = subscriptionRepository.findAllByStatusAndCurrentPeriodEnd(SubscriptionStatus.ACTIVE, today);
         for (Subscription subscription : due) {
             try {
@@ -86,9 +90,44 @@ public class BillingCycleService {
         }
     }
 
+    /**
+     * Runs billing for any ACTIVE subscription whose period has already ended as of
+     * {@code asOf}, used by the demo "fast-forward" endpoint instead of waiting for
+     * the nightly cron. A subscription may need several cycles to catch up after a
+     * large jump, so each one is re-checked and re-processed until its period end
+     * is back in the future (capped to avoid runaway loops on bad data).
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public int runDueCycles(LocalDate asOf) {
+        List<Subscription> due = subscriptionRepository
+                .findAllByStatusAndCurrentPeriodEndLessThanEqual(SubscriptionStatus.ACTIVE, asOf);
+        int processed = 0;
+        for (Subscription subscription : due) {
+            UUID subscriptionId = subscription.getId();
+            for (int cycles = 0; cycles < 24; cycles++) {
+                Subscription fresh = subscriptionRepository.findById(subscriptionId).orElse(null);
+                if (fresh == null || fresh.getStatus() != SubscriptionStatus.ACTIVE) {
+                    break;
+                }
+                if (fresh.getCurrentPeriodEnd().isAfter(asOf)) {
+                    break;
+                }
+                try {
+                    self.processTenant(fresh);
+                    processed++;
+                } catch (Exception e) {
+                    log.error("Demo time-travel billing failed for tenant {}: {} - {}",
+                            fresh.getTenantId(), e.getClass().getSimpleName(), e.getMessage());
+                    break;
+                }
+            }
+        }
+        return processed;
+    }
+
     @Transactional
     public void processTenant(Subscription subscription) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = clock.today();
         Plan plan = planRepository.findById(subscription.getPlanId())
                 .orElseThrow(() -> new IllegalStateException("Plan not found: " + subscription.getPlanId()));
 
@@ -131,7 +170,7 @@ public class BillingCycleService {
         long totalCents = invoice.getLineItems().stream().mapToLong(InvoiceLineItem::getAmountCents).sum();
         invoice.setTotalCents(totalCents);
         invoice.setStatus(InvoiceStatus.FINALIZED);
-        invoice.setFinalizedAt(LocalDateTime.now());
+        invoice.setFinalizedAt(clock.now());
         invoice = invoiceRepository.save(invoice);
 
         Payment payment = new Payment();
@@ -142,7 +181,7 @@ public class BillingCycleService {
         payment.setIdempotencyKey("billing-cycle-" + invoice.getId());
         payment = paymentRepository.save(payment);
 
-        GatewayResult result = paymentGateway.charge(totalCents, invoice.getId().toString());
+        GatewayResult result = paymentGateway.charge(subscription.getTenantId(), totalCents, invoice.getId().toString());
 
         if (result.success()) {
             payment.setStatus(PaymentStatus.SUCCEEDED);
@@ -150,7 +189,7 @@ public class BillingCycleService {
             paymentRepository.save(payment);
 
             invoice.setStatus(InvoiceStatus.PAID);
-            invoice.setPaidAt(LocalDateTime.now());
+            invoice.setPaidAt(clock.now());
             invoiceRepository.save(invoice);
 
             LedgerEntry charge = new LedgerEntry();
@@ -174,16 +213,20 @@ public class BillingCycleService {
             if (subscription.getCancelledAt() != null) {
                 subscription.setStatus(SubscriptionStatus.CANCELLED);
             }
+            // Apply any downgrade requested mid-cycle now that the new period starts.
+            if (subscription.getPendingPlanId() != null) {
+                subscription.setPlanId(subscription.getPendingPlanId());
+                subscription.setPendingPlanId(null);
+            }
             subscriptionRepository.save(subscription);
         } else {
             payment.setStatus(PaymentStatus.FAILED);
             paymentRepository.save(payment);
 
-            long failedCount = paymentRepository.countByInvoiceIdAndStatus(invoice.getId(), PaymentStatus.FAILED);
-            if (failedCount >= 3) {
-                subscription.setStatus(SubscriptionStatus.PAST_DUE);
-                subscriptionRepository.save(subscription);
-            }
+            // The demo wallet won't refill itself, so there's no point waiting for
+            // retries — once a renewal can't be charged, the subscription drops.
+            subscription.setStatus(SubscriptionStatus.PAST_DUE);
+            subscriptionRepository.save(subscription);
         }
     }
 }

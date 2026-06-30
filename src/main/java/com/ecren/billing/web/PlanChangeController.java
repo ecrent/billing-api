@@ -1,7 +1,7 @@
 package com.ecren.billing.web;
 
 import com.ecren.billing.dto.request.ChangePlanRequest;
-import com.ecren.billing.dto.response.InvoiceResponse;
+import com.ecren.billing.dto.response.ChangePlanResponse;
 import com.ecren.billing.service.PlanChangeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,9 +20,10 @@ public class PlanChangeController {
         this.service = service;
     }
 
-    @Operation(summary = "Change plan with proration")
+    @Operation(summary = "Change plan — upgrades apply immediately with proration, "
+            + "downgrades are deferred to the next billing period")
     @PostMapping("/change-plan")
-    public ResponseEntity<InvoiceResponse> changePlan(@Valid @RequestBody ChangePlanRequest request) {
+    public ResponseEntity<ChangePlanResponse> changePlan(@Valid @RequestBody ChangePlanRequest request) {
         return service.changePlan(request);
     }
 }

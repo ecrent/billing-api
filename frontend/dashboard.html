@@ -125,6 +125,24 @@
           <h2>Payments</h2>
           <p>Successful payment history.</p>
         </div>
+        <div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div class="card-title" style="margin:0;">Demo Clock</div>
+            <div style="color:var(--muted);font-size:13px;margin-top:4px;">
+              Simulated date: <strong id="demo-date">—</strong>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" id="advance-time-btn" onclick="advanceTime()">
+            Fast-forward 15 days &rarr;
+          </button>
+        </div>
+        <div class="card">
+          <div class="card-title" style="margin:0;">Wallet Balance</div>
+          <div style="color:var(--muted);font-size:13px;margin-top:4px;">
+            Demo play money. Every account starts with $1,000 — when it runs out, your subscription drops.
+          </div>
+          <div class="stat-value" id="wallet-balance" style="margin-top:10px;">—</div>
+        </div>
         <div class="card">
           <div id="payments-list"><div class="spinner"></div></div>
         </div>

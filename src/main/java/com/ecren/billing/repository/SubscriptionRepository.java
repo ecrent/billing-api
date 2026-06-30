@@ -13,4 +13,5 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
     Optional<Subscription> findByTenantIdAndStatus(UUID tenantId, SubscriptionStatus status);
     boolean existsByTenantIdAndStatus(UUID tenantId, SubscriptionStatus status);
     List<Subscription> findAllByStatusAndCurrentPeriodEnd(SubscriptionStatus status, LocalDate date);
+    List<Subscription> findAllByStatusAndCurrentPeriodEndLessThanEqual(SubscriptionStatus status, LocalDate date);
 }

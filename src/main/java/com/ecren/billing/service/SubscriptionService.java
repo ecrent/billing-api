@@ -1,5 +1,6 @@
 package com.ecren.billing.service;
 
+import com.ecren.billing.common.DemoClock;
 import com.ecren.billing.common.TenantContext;
 import com.ecren.billing.domain.Subscription;
 import com.ecren.billing.domain.enums.SubscriptionStatus;
@@ -14,8 +15,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.UUID;
@@ -29,10 +28,12 @@ public class SubscriptionService {
     private final PlanRepository planRepository;
     private final SubscriptionMapper mapper;
     private final Set<UUID> protectedTenantIds;
+    private final DemoClock clock;
 
     public SubscriptionService(SubscriptionRepository repository, PlanRepository planRepository,
                                SubscriptionMapper mapper,
-                               @Value("${app.protected-tenant-ids:}") String protectedTenantIdsRaw) {
+                               @Value("${app.protected-tenant-ids:}") String protectedTenantIdsRaw,
+                               DemoClock clock) {
         this.repository = repository;
         this.planRepository = planRepository;
         this.mapper = mapper;
@@ -41,6 +42,7 @@ public class SubscriptionService {
                 .filter(s -> !s.isEmpty())
                 .map(UUID::fromString)
                 .collect(Collectors.toSet());
+        this.clock = clock;
     }
 
     @Transactional
@@ -58,8 +60,8 @@ public class SubscriptionService {
         Subscription subscription = new Subscription();
         subscription.setTenantId(tenantId);
         subscription.setPlanId(request.planId());
-        subscription.setCurrentPeriodStart(LocalDate.now());
-        subscription.setCurrentPeriodEnd(LocalDate.now().plusDays(30));
+        subscription.setCurrentPeriodStart(clock.today());
+        subscription.setCurrentPeriodEnd(clock.today().plusDays(30));
 
         return mapper.toResponse(repository.save(subscription));
     }
@@ -81,7 +83,7 @@ public class SubscriptionService {
                 .orElseThrow(() -> new ResourceNotFoundException("No active subscription for tenant: " + tenantId));
 
         subscription.setStatus(SubscriptionStatus.CANCELLED);
-        subscription.setCancelledAt(LocalDateTime.now());
+        subscription.setCancelledAt(clock.now());
         return mapper.toResponse(repository.save(subscription));
     }
 }

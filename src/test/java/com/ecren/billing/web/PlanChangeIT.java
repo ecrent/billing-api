@@ -9,7 +9,7 @@ import com.ecren.billing.domain.enums.PlanStatus;
 import com.ecren.billing.domain.enums.SubscriptionStatus;
 import com.ecren.billing.domain.enums.TenantStatus;
 import com.ecren.billing.dto.request.ChangePlanRequest;
-import com.ecren.billing.dto.response.InvoiceResponse;
+import com.ecren.billing.dto.response.ChangePlanResponse;
 import com.ecren.billing.repository.InvoiceRepository;
 import com.ecren.billing.repository.LedgerEntryRepository;
 import com.ecren.billing.repository.PlanRepository;
@@ -69,26 +69,27 @@ class PlanChangeIT extends BaseIT {
     }
 
     @Test
-    void changePlan_givenSuccess_thenReturns200WithPaidInvoiceAndLineItems() {
+    void changePlan_givenUpgrade_thenReturns200WithPaidInvoiceAndLineItems() {
         Tenant tenant = createTenant("Plan Change Corp", "planchange@example.com");
         Plan basicPlan = createPlan("Basic", "basic-change", 3000L);
         Plan proPlan = createPlan("Pro", "pro-change", 6000L);
         createSubscription(tenant.getId(), basicPlan.getId());
 
-        ResponseEntity<InvoiceResponse> response = rest.exchange(
+        ResponseEntity<ChangePlanResponse> response = rest.exchange(
                 "/api/v1/subscriptions/current/change-plan",
                 HttpMethod.POST,
                 new HttpEntity<>(new ChangePlanRequest(proPlan.getId()), userHeaders(tenant.getId())),
-                InvoiceResponse.class);
+                ChangePlanResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
-        InvoiceResponse body = response.getBody();
+        ChangePlanResponse body = response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.status()).isEqualTo("PAID");
-        assertThat(body.lineItems()).hasSize(2);
-        assertThat(body.lineItems()).anyMatch(li -> li.type().equals("PRORATION_CREDIT"));
-        assertThat(body.lineItems()).anyMatch(li -> li.type().equals("PRORATION_CHARGE"));
+        assertThat(body.invoice()).isNotNull();
+        assertThat(body.invoice().status()).isEqualTo("PAID");
+        assertThat(body.invoice().lineItems()).hasSize(2);
+        assertThat(body.invoice().lineItems()).anyMatch(li -> li.type().equals("PRORATION_CREDIT"));
+        assertThat(body.invoice().lineItems()).anyMatch(li -> li.type().equals("PRORATION_CHARGE"));
 
         Subscription updated = subscriptionRepository.findByTenantIdAndStatus(tenant.getId(), SubscriptionStatus.ACTIVE)
                 .orElseThrow();
@@ -99,7 +100,7 @@ class PlanChangeIT extends BaseIT {
     }
 
     @Test
-    void changePlan_givenPaymentFailure_thenReturns402AndSubscriptionIsPastDue() {
+    void changePlan_givenUpgradePaymentFailure_thenReturns402AndSubscriptionIsPastDue() {
         Tenant tenant = createTenant("Fail Pay Corp", "failpay@example.com");
         Plan basicPlan = createPlan("Basic", "basic-fail", 3000L);
         Plan proPlan = createPlan("Pro", "pro-fail", 6000L);
@@ -108,16 +109,46 @@ class PlanChangeIT extends BaseIT {
         HttpHeaders headers = userHeaders(tenant.getId());
         headers.set("X-Mock-Gateway-Result", "FAIL");
 
-        ResponseEntity<InvoiceResponse> response = rest.exchange(
+        ResponseEntity<ChangePlanResponse> response = rest.exchange(
                 "/api/v1/subscriptions/current/change-plan",
                 HttpMethod.POST,
                 new HttpEntity<>(new ChangePlanRequest(proPlan.getId()), headers),
-                InvoiceResponse.class);
+                ChangePlanResponse.class);
 
         assertThat(response.getStatusCode().value()).isEqualTo(402);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().status()).isEqualTo("FINALIZED");
+        assertThat(response.getBody().invoice().status()).isEqualTo("FINALIZED");
         assertThat(subscriptionRepository.existsByTenantIdAndStatus(tenant.getId(), SubscriptionStatus.PAST_DUE)).isTrue();
+    }
+
+    @Test
+    void changePlan_givenDowngrade_thenReturns200WithoutInvoiceAndAppliesNextPeriod() {
+        Tenant tenant = createTenant("Downgrade Corp", "downgrade@example.com");
+        Plan proPlan = createPlan("Pro", "pro-downgrade", 6000L);
+        Plan basicPlan = createPlan("Basic", "basic-downgrade", 3000L);
+        createSubscription(tenant.getId(), proPlan.getId());
+
+        ResponseEntity<ChangePlanResponse> response = rest.exchange(
+                "/api/v1/subscriptions/current/change-plan",
+                HttpMethod.POST,
+                new HttpEntity<>(new ChangePlanRequest(basicPlan.getId()), userHeaders(tenant.getId())),
+                ChangePlanResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        ChangePlanResponse body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.invoice()).isNull();
+        assertThat(body.message()).contains("Basic");
+
+        Subscription updated = subscriptionRepository.findByTenantIdAndStatus(tenant.getId(), SubscriptionStatus.ACTIVE)
+                .orElseThrow();
+        assertThat(updated.getPlanId()).isEqualTo(proPlan.getId()); // unchanged until next period
+        assertThat(updated.getPendingPlanId()).isEqualTo(basicPlan.getId());
+
+        long ledgerCount = ledgerEntryRepository.findByTenantIdOrderByCreatedAtDesc(tenant.getId()).size();
+        assertThat(ledgerCount).isEqualTo(0);
+        assertThat(invoiceRepository.findByTenantId(tenant.getId(), org.springframework.data.domain.Pageable.unpaged()).getTotalElements())
+                .isEqualTo(0);
     }
 
     @Test

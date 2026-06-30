@@ -1,5 +1,6 @@
 package com.ecren.billing.service;
 
+import com.ecren.billing.common.DemoClock;
 import com.ecren.billing.domain.Invoice;
 import com.ecren.billing.domain.Payment;
 import com.ecren.billing.domain.Plan;
@@ -33,7 +34,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -53,6 +53,8 @@ class BillingCycleServiceTest {
     UsageRecordRepository usageRecordRepository;
     @Mock
     PaymentGateway paymentGateway;
+    @Mock
+    DemoClock clock;
 
     @InjectMocks
     BillingCycleService service;
@@ -71,6 +73,9 @@ class BillingCycleServiceTest {
 
         subscription = buildSubscription(tenantId, planId, subscriptionId, null);
         plan = buildPlan(planId, 1000L);
+
+        lenient().when(clock.today()).thenReturn(LocalDate.now());
+        lenient().when(clock.now()).thenReturn(java.time.LocalDateTime.now());
     }
 
     @Test
@@ -90,7 +95,7 @@ class BillingCycleServiceTest {
             setPaymentId(p);
             return p;
         });
-        when(paymentGateway.charge(anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-1", "OK"));
+        when(paymentGateway.charge(any(), anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-1", "OK"));
         when(ledgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(subscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -122,7 +127,7 @@ class BillingCycleServiceTest {
             setPaymentId(p);
             return p;
         });
-        when(paymentGateway.charge(anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-2", "OK"));
+        when(paymentGateway.charge(any(), anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-2", "OK"));
         when(ledgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(subscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -157,7 +162,7 @@ class BillingCycleServiceTest {
             setPaymentId(p);
             return p;
         });
-        when(paymentGateway.charge(anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-3", "OK"));
+        when(paymentGateway.charge(any(), anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-3", "OK"));
         when(ledgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(subscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -183,7 +188,7 @@ class BillingCycleServiceTest {
             setPaymentId(p);
             return p;
         });
-        when(paymentGateway.charge(anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-4", "OK"));
+        when(paymentGateway.charge(any(), anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-4", "OK"));
         when(ledgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(subscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -195,7 +200,9 @@ class BillingCycleServiceTest {
     }
 
     @Test
-    void processTenant_givenPaymentFailure3Times_thenPastDue() {
+    void processTenant_givenPaymentFailure_thenPastDueImmediately() {
+        // No retry loop for the demo wallet model — once a renewal charge fails
+        // (e.g. the wallet ran dry), the subscription drops right away.
         plan.setMetricLimits(List.of());
 
         when(planRepository.findById(planId)).thenReturn(Optional.of(plan));
@@ -205,8 +212,7 @@ class BillingCycleServiceTest {
             setPaymentId(p);
             return p;
         });
-        when(paymentGateway.charge(anyLong(), anyString())).thenReturn(new GatewayResult(false, null, "Declined"));
-        when(paymentRepository.countByInvoiceIdAndStatus(any(), eq(PaymentStatus.FAILED))).thenReturn(3L);
+        when(paymentGateway.charge(any(), anyLong(), anyString())).thenReturn(new GatewayResult(false, null, "Insufficient funds"));
         when(subscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.processTenant(subscription);
@@ -245,7 +251,7 @@ class BillingCycleServiceTest {
             setPaymentId(p);
             return p;
         });
-        when(paymentGateway.charge(anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-5", "OK"));
+        when(paymentGateway.charge(any(), anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-5", "OK"));
         when(ledgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(subscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -254,6 +260,48 @@ class BillingCycleServiceTest {
 
         // sub2 should still be processed: subscriptionRepository.save called once (for sub2 only)
         verify(subscriptionRepository, times(1)).save(any(Subscription.class));
+    }
+
+    @Test
+    void runDueCycles_givenOverdueSubscription_thenProcessesItOnceAndStops() {
+        LocalDate asOf = LocalDate.now();
+        subscription.setCurrentPeriodEnd(asOf); // due
+        plan.setMetricLimits(List.of());
+
+        when(subscriptionRepository.findAllByStatusAndCurrentPeriodEndLessThanEqual(SubscriptionStatus.ACTIVE, asOf))
+                .thenReturn(List.of(subscription));
+        // Same instance returned each lookup so in-place mutation from processTenant is visible
+        // on the next loop iteration, the way the real repository would behave.
+        when(subscriptionRepository.findById(subscriptionId)).thenReturn(Optional.of(subscription));
+        when(planRepository.findById(planId)).thenReturn(Optional.of(plan));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> assignId(inv.getArgument(0)));
+        when(paymentRepository.save(any())).thenAnswer(inv -> {
+            Payment p = inv.getArgument(0);
+            setPaymentId(p);
+            return p;
+        });
+        when(paymentGateway.charge(any(), anyLong(), anyString())).thenReturn(new GatewayResult(true, "ref-6", "OK"));
+        when(ledgerEntryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(subscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        setSelf(service, service);
+
+        int processed = service.runDueCycles(asOf);
+
+        assertThat(processed).isEqualTo(1);
+        // The new period was rolled forward relative to "now", so it's no longer due — no second cycle.
+        assertThat(subscription.getCurrentPeriodEnd()).isAfter(asOf);
+    }
+
+    @Test
+    void runDueCycles_givenNoOverdueSubscriptions_thenProcessesNone() {
+        LocalDate asOf = LocalDate.now();
+        when(subscriptionRepository.findAllByStatusAndCurrentPeriodEndLessThanEqual(SubscriptionStatus.ACTIVE, asOf))
+                .thenReturn(List.of());
+
+        int processed = service.runDueCycles(asOf);
+
+        assertThat(processed).isEqualTo(0);
+        verifyNoInteractions(invoiceRepository, paymentGateway);
     }
 
     // --- helpers ---

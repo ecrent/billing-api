@@ -30,6 +30,10 @@ public class Subscription extends BaseEntity {
 
     private LocalDateTime cancelledAt;
 
+    // Set when a downgrade is requested mid-cycle; applied by BillingCycleService
+    // when the period rolls over, instead of switching plans immediately.
+    private UUID pendingPlanId;
+
     @Version
     private Long version;
 
@@ -50,6 +54,9 @@ public class Subscription extends BaseEntity {
 
     public LocalDateTime getCancelledAt() { return cancelledAt; }
     public void setCancelledAt(LocalDateTime cancelledAt) { this.cancelledAt = cancelledAt; }
+
+    public UUID getPendingPlanId() { return pendingPlanId; }
+    public void setPendingPlanId(UUID pendingPlanId) { this.pendingPlanId = pendingPlanId; }
 
     public Long getVersion() { return version; }
     public void setVersion(Long version) { this.version = version; }

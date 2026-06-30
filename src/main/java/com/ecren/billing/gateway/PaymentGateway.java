@@ -1,5 +1,7 @@
 package com.ecren.billing.gateway;
 
+import java.util.UUID;
+
 public interface PaymentGateway {
-    GatewayResult charge(long amountCents, String reference);
+    GatewayResult charge(UUID tenantId, long amountCents, String reference);
 }

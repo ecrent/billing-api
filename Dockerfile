@@ -1,6 +1,6 @@
 # Stage 1: Build
 # Maven image contains both JDK and Maven — the VPS/CI needs neither installed.
-FROM maven:3.9-eclipse-temurin-21@sha256:52182d56c0cf03e906a4503a77de81323706e57f0cb4ed3acbfa1054cbff1bae AS build
+FROM maven:3-eclipse-temurin-24@sha256:a137a467ec89b5713d0be817b55bdba6b4d6ef16e3d05565a79bc08d8e775a1c AS build
 WORKDIR /app
 # Copy pom first so dependency downloads are cached separately from source changes.
 COPY pom.xml .

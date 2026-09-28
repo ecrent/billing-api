@@ -1,0 +1,62 @@
+name: Dependabot security auto-merge
+
+# Auto-approves and merges Dependabot SECURITY-fix PRs once CI is green.
+# Scheduled version-update PRs (weekly) are left for manual review.
+#
+# Detection: Dependabot security-fix PR bodies end with a link to the repo's
+# Security Alerts page ("disable automated security fix PRs for this repo");
+# scheduled update PRs never contain that phrase. We deliberately do NOT use
+# dependabot/fetch-metadata alert-lookup: it requires a PAT, and the built-in
+# GITHUB_TOKEN gets 403 from the Dependabot alerts API.
+#
+# No checkout is performed here, so the workflow never executes PR code.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  automerge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Detect security-fix PR
+        id: detect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          body="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}" --jq '.body // ""')"
+          if grep -q "disable automated security fix PRs" <<< "$body"; then
+            echo "security=true" >> "$GITHUB_OUTPUT"
+            echo "security-fix PR detected"
+          else
+            echo "scheduled version-update PR — leaving for manual review"
+          fi
+
+      - name: Approve, wait for CI, merge
+        if: steps.detect.outputs.security == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr review --approve "$PR_URL"
+
+          # Wait (up to 15 min) for CI checks to register on the PR.
+          deadline=$((SECONDS + 900))
+          while [ $SECONDS -lt $deadline ]; do
+            checks="$(gh pr checks "$PR_URL" 2>/dev/null || true)"
+            [ -n "$checks" ] && break
+            sleep 15
+          done
+
+          # Wait for all checks to finish; --fail-fast aborts on first failure.
+          if ! gh pr checks "$PR_URL" --watch --interval 30 --fail-fast; then
+            echo "::error::CI checks failed — not merging"
+            exit 1
+          fi
+          gh pr merge --squash "$PR_URL" --delete-branch

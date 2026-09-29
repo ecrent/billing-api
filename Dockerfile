@@ -13,6 +13,9 @@ RUN mvn package -DskipTests -q
 # Alpine JRE is ~100MB vs ~300MB for the full JDK image.
 FROM eclipse-temurin:21-jre-alpine@sha256:3f08b13888f595cc49edabea7250ba69499ba25602b267da591720769400e08c
 WORKDIR /app
+# Pull fixed OS packages (openssl/libexpat/sqlite/p11-kit HIGHs) on top of the
+# pinned base digest; rebuilds always get the current patched versions.
+RUN apk upgrade --no-cache
 RUN addgroup -S billing && adduser -S billing -G billing
 USER billing
 COPY --from=build /app/target/billing-*.jar app.jar

@@ -21,6 +21,11 @@
 		<mapstruct.version>1.6.3</mapstruct.version>
 		<shedlock.version>6.10.0</shedlock.version>
 		<springdoc.version>2.9.1</springdoc.version>
+		<!-- CVE fixes: override Boot 3.5.16 managed versions until the next
+		     Boot patch picks them up (Tomcat: security-constraint bypass
+		     CVE-2026-65182; pgjdbc: SCRAM downgrade CVE-2026-54291) -->
+		<tomcat.version>10.1.58</tomcat.version>
+		<postgresql.version>42.7.12</postgresql.version>
 	</properties>
 
 	<dependencies>

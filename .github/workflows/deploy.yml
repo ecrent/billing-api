@@ -1,11 +1,18 @@
 name: Build & Deploy API
 
-# Deploy only on pushes to main. NEVER use a workflow_run trigger here: it
-# fires for completed CI runs (including PRs from forks), and checking out
-# workflow_run.head_sha would let a fork PR named "main" get built, pushed as
-# :latest with this repo's packages:write token, and deployed to the VPS.
+# CI triggers this workflow after it completes. This is safe ONLY because of
+# two guards — without them this trigger is the classic "pwn request" (a fork
+# PR from a branch named "main" would get built, pushed as :latest with this
+# repo's packages:write token, and SSH-deployed to the VPS):
+#   1. job-level: the triggering CI run must come from THIS repository, not a
+#      fork (head_repository.full_name == github.repository).
+#   2. step-level: the triggering commit must be an ancestor of origin/main —
+#      proven with a real `git fetch <sha>`, which FAILS for any commit that
+#      is not reachable in this repo (i.e. any fork commit).
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
 
 env:
@@ -15,34 +22,35 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
     permissions:
       contents: read
       packages: write
-      actions: read
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
 
     steps:
-      # Keep the old "deploy only after green CI" semantics without the pwn
-      # request: poll the CI run for THIS commit and fail if it fails.
-      - name: Wait for CI to pass on this commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SHA: ${{ github.sha }}
-        run: |
-          run_id=""
-          for i in $(seq 1 12); do
-            run_id=$(gh run list --workflow CI --commit "$SHA" --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
-            [ -n "$run_id" ] && break
-            sleep 10
-          done
-          if [ -z "$run_id" ]; then
-            echo "No CI run found for $SHA" >&2; exit 1
-          fi
-          gh run watch "$run_id" --exit-status --interval 15
-
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Verify triggering commit is a push to main
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          git fetch --quiet origin "$SHA" || {
+            echo "Commit $SHA is not reachable in this repository (fork commit?) — refusing to deploy" >&2
+            exit 1
+          }
+          git merge-base --is-ancestor "$SHA" origin/main || {
+            echo "Commit $SHA is not on main — refusing to deploy" >&2
+            exit 1
+          }
+          git checkout --quiet "$SHA"
 
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -58,7 +66,7 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:${{ github.event.workflow_run.head_sha }}
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1

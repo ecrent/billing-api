@@ -1,9 +1,11 @@
 name: Build & Deploy API
 
+# Deploy only on pushes to main. NEVER use a workflow_run trigger here: it
+# fires for completed CI runs (including PRs from forks), and checking out
+# workflow_run.head_sha would let a fork PR named "main" get built, pushed as
+# :latest with this repo's packages:write token, and deployed to the VPS.
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
+  push:
     branches: [main]
 
 env:
@@ -13,7 +15,7 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.ref == 'refs/heads/main' }}
     permissions:
       contents: read
       packages: write
@@ -21,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
 
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -37,7 +39,7 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:${{ github.event.workflow_run.head_sha }}
+            ${{ env.IMAGE }}:${{ github.sha }}
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1

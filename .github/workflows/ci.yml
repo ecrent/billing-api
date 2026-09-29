@@ -53,5 +53,9 @@ jobs:
         with:
           image-ref: billing-api:scan
           format: table
-          exit-code: '0'
+          # Fail the build on fixed CRITICAL/HIGH vulns so they block deploys
+          # (deploy.yml only ships after green CI). ignore-unfixed keeps
+          # base-image CVEs without a patch available from breaking CI.
+          exit-code: '1'
+          ignore-unfixed: true
           severity: CRITICAL,HIGH

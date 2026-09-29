@@ -1,0 +1,8 @@
+# Prod profile: fail fast if credentials are missing instead of silently
+# falling back to the weak defaults in application.yml (those exist only so
+# the test context can start; @ServiceConnection overrides them there).
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}

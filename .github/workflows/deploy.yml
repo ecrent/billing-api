@@ -19,8 +19,27 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: read
 
     steps:
+      # Keep the old "deploy only after green CI" semantics without the pwn
+      # request: poll the CI run for THIS commit and fail if it fails.
+      - name: Wait for CI to pass on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          run_id=""
+          for i in $(seq 1 12); do
+            run_id=$(gh run list --workflow CI --commit "$SHA" --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+            [ -n "$run_id" ] && break
+            sleep 10
+          done
+          if [ -z "$run_id" ]; then
+            echo "No CI run found for $SHA" >&2; exit 1
+          fi
+          gh run watch "$run_id" --exit-status --interval 15
+
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false

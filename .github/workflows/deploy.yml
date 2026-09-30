@@ -1,14 +1,15 @@
 name: Build & Deploy API
 
 # CI triggers this workflow after it completes. This is safe ONLY because of
-# two guards — without them this trigger is the classic "pwn request" (a fork
+# guards — without them this trigger is the classic "pwn request" (a fork
 # PR from a branch named "main" would get built, pushed as :latest with this
 # repo's packages:write token, and SSH-deployed to the VPS):
 #   1. job-level: the triggering CI run must come from THIS repository, not a
-#      fork (head_repository.full_name == github.repository).
-#   2. step-level: the triggering commit must be an ancestor of origin/main —
-#      proven with a real `git fetch <sha>`, which FAILS for any commit that
-#      is not reachable in this repo (i.e. any fork commit).
+#      fork (head_repository.full_name == github.repository), and must not be
+#      a pull_request event (PR CI completions skip the deploy job cleanly).
+#   2. step-level: the triggering commit must be an ancestor of main —
+#      proven with an authenticated `git fetch <sha>`, which FAILS for any
+#      commit that is not reachable in this repo (i.e. any fork commit).
 on:
   workflow_run:
     workflows: ["CI"]
@@ -24,7 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       ${{ github.event.workflow_run.conclusion == 'success' &&
-          github.event.workflow_run.head_repository.full_name == github.repository }}
+          github.event.workflow_run.head_repository.full_name == github.repository &&
+          github.event.workflow_run.event != 'pull_request' }}
     permissions:
       contents: read
       packages: write
@@ -38,15 +40,20 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Fetch over an authenticated URL (defense in depth): the ancestry check
+      # must not depend on anonymous fetch access staying possible.
       - name: Verify triggering commit is a push to main
         env:
           SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git fetch --quiet origin "$SHA" || {
+          authed="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --quiet "$authed" +refs/heads/main:refs/remotes/origin/main
+          git fetch --quiet "$authed" "$SHA" || {
             echo "Commit $SHA is not reachable in this repository (fork commit?) — refusing to deploy" >&2
             exit 1
           }
-          git merge-base --is-ancestor "$SHA" origin/main || {
+          git merge-base --is-ancestor "$SHA" refs/remotes/origin/main || {
             echo "Commit $SHA is not on main — refusing to deploy" >&2
             exit 1
           }
@@ -59,34 +66,44 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Attestations (provenance/SBOM) need the container driver — without
+      # setup-buildx they fail with 'Attestation is not supported for the
+      # docker driver'.
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
       - name: Build and push Docker image
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: .
           push: true
+          provenance: mode=max
+          sbom: true
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.event.workflow_run.head_sha }}
 
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            bash -lc '
-              cd /opt/eanil/compose
+      - name: Pin VPS host keys
+        env:
+          VPS_SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$VPS_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
-              # Activate billing-api nginx config on first deploy
-              if [ -f /opt/eanil/nginx/conf.d/billing-api.conf.disabled ]; then
-                mv /opt/eanil/nginx/conf.d/billing-api.conf.disabled \
-                   /opt/eanil/nginx/conf.d/billing-api.conf
-              fi
-
-              docker pull ghcr.io/ecrent/billing-api:latest
-              docker compose up -d --force-recreate billing-api
-              docker compose exec -T nginx nginx -s reload
-
-              docker image prune -f
-            '
+      # The VPS deploy user's authorized_keys line forces a wrapper script
+      # (`command=".../deploy-billing-api.sh",restrict`) that receives the
+      # SSH command as $1, validates it as a 40-char commit SHA, pulls
+      # ghcr.io/ecrent/billing-api:$SHA, retags :latest and recreates the
+      # container. So the remote command MUST be exactly "$SHA" — no shell,
+      # no script block. Rollback = rerun the wrapper with an older SHA.
+      - name: Deploy to VPS (restricted deploy key)
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          SSH_HOST: ${{ secrets.VPS_HOST }}
+          SSH_USER: ${{ secrets.VPS_USER }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o BatchMode=yes "$SSH_USER@$SSH_HOST" "$SHA"

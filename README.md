@@ -7,6 +7,22 @@ A multi-tenant SaaS subscription billing REST API built with Spring Boot 3.5 and
 ## Live API
 https://billing-api.eanil.dev
 
+The API is a **public demo** — it is protected by nginx rate limiting and
+pagination caps, not by authentication. See [SECURITY.md](SECURITY.md).
+
+## Deployment
+
+Images are published to `ghcr.io/ecrent/billing-api`, tagged with both the
+commit SHA and `:latest`, on every green CI run against `main`.
+
+Deploy happens automatically after CI: a **restricted SSH deploy key** (the VPS
+`authorized_keys` entry forces a pinned wrapper script) connects to the VPS and
+runs the wrapper with the commit SHA as its only argument. The wrapper
+validates the SHA, pulls that exact image tag, retags it `:latest`, and
+recreates the container.
+
+**Rollback:** rerun the wrapper with an older commit SHA.
+
 ## Tech Stack
 
 | Layer | Choice |

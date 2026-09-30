@@ -107,6 +107,20 @@ class InvoiceControllerIT {
     }
 
     @Test
+    void listInvoices_givenOversizedPageSize_thenClampsToMax() {
+        ResponseEntity<PageResponse<Map<String, Object>>> response = rest.exchange(
+                "/api/v1/invoices?page=0&size=1000000",
+                HttpMethod.GET,
+                new HttpEntity<>(headersWithTenantId(tenant.getId())),
+                new ParameterizedTypeReference<>() {});
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        PageResponse<Map<String, Object>> body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.size()).isLessThanOrEqualTo(100);
+    }
+
+    @Test
     void getInvoice_givenExistingId_thenReturnsInvoiceWithLineItems() {
         Invoice invoice = buildInvoice(InvoiceStatus.DRAFT);
         InvoiceLineItem item1 = buildLineItem(invoice, LineItemType.BASE_FEE, "Base fee", 999L);

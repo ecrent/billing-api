@@ -1,5 +1,6 @@
 package com.ecren.billing.service;
 
+import com.ecren.billing.common.PageRequests;
 import com.ecren.billing.common.TenantContext;
 import com.ecren.billing.domain.Invoice;
 import com.ecren.billing.domain.enums.InvoiceStatus;
@@ -10,7 +11,6 @@ import com.ecren.billing.exception.ResourceNotFoundException;
 import com.ecren.billing.mapper.InvoiceMapper;
 import com.ecren.billing.repository.InvoiceRepository;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +31,7 @@ public class InvoiceService {
 
     public PageResponse<InvoiceResponse> getAll(int page, int size, String status) {
         UUID tenantId = TenantContext.get();
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequests.of(page, size);
 
         Page<Invoice> result;
         if (status == null || status.isBlank()) {
